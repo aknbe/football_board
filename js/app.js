@@ -427,6 +427,35 @@
     saveToStorage();
   }
 
+  // ── Orientation transform ──────────────────────────────────────────────────
+  // Portrait→Landscape: X=y, Y=W-x  (90° CW rotation, W = portrait field width)
+  // Landscape→Portrait: X=W-y, Y=x  (inverse)
+
+  function _transformPt(x, y, fromOri, W) {
+    return fromOri === 'portrait'
+      ? { x: y,     y: W - x }   // portrait → landscape
+      : { x: W - y, y: x     };  // landscape → portrait
+  }
+
+  function _transformSnapshot(snapshot, fromOri, W) {
+    snapshot.players.forEach(p => {
+      const t = _transformPt(p.x, p.y, fromOri, W);
+      p.x = t.x; p.y = t.y;
+    });
+    const tb = _transformPt(snapshot.ball.x, snapshot.ball.y, fromOri, W);
+    snapshot.ball.x = tb.x; snapshot.ball.y = tb.y;
+    snapshot.drawings.forEach(d => {
+      d.points = d.points.map(pt => _transformPt(pt.x, pt.y, fromOri, W));
+    });
+  }
+
+  function transformAllElements(fromOri, toOri) {
+    if (fromOri === toOri) return;
+    const W = FIELD_SIZES[state.fieldSize].width; // portrait width (50 or 40)
+    _transformSnapshot(state, fromOri, W);
+    state.frames.forEach(f => _transformSnapshot(f, fromOri, W));
+  }
+
   // ── LocalStorage ───────────────────────────────────────────────────────────
   const STORE_KEY = 'football_board_v1';
 
@@ -659,12 +688,16 @@ B2: (12, 20)
 
     // Orientation
     document.getElementById('btn-portrait' ).onclick = () => {
+      if (state.orientation === 'portrait') return;
+      transformAllElements(state.orientation, 'portrait');
       state.orientation = 'portrait';
-      syncOriBtns(); resetView(); render();
+      syncOriBtns(); resetView(); render(); saveToStorage();
     };
     document.getElementById('btn-landscape').onclick = () => {
+      if (state.orientation === 'landscape') return;
+      transformAllElements(state.orientation, 'landscape');
       state.orientation = 'landscape';
-      syncOriBtns(); resetView(); render();
+      syncOriBtns(); resetView(); render(); saveToStorage();
     };
 
     // Formation
