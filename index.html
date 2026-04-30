@@ -22,6 +22,8 @@
   <button id="btn-save-frame" class="tb-btn" title="フレーム保存">📷</button>
   <button id="btn-play"  class="tb-btn" title="再生 / 停止">▶</button>
   <button id="btn-frames" class="tb-btn" title="フレーム一覧">🎞</button>
+  <div class="tb-sep"></div>
+  <button id="btn-ai"    class="tb-btn" title="AIに相談">🤖</button>
   <div class="tb-spacer"></div>
   <button id="btn-menu"  class="tb-btn" title="メニュー">☰</button>
 </div>
@@ -124,6 +126,54 @@
     ピンチ / ホイールでズーム
   </div>
 </div>
+
+<!-- ── AI consultation dialog ─────────────────────────────────────────────── -->
+<div id="ai-dlg">
+  <div class="ai-box">
+    <div class="ai-box-hdr">
+      <h3>🤖 AI に相談</h3>
+      <button class="menu-hdr-close" id="ai-close">✕</button>
+    </div>
+    <div class="ai-box-body">
+
+      <!-- Prompt section -->
+      <div class="ai-sec-ttl">現在の配置（プロンプト）</div>
+      <div class="ai-prompt-wrap">
+        <textarea id="ai-prompt" readonly></textarea>
+        <button class="ai-copy-btn" id="btn-copy-prompt" title="コピー">⎘</button>
+      </div>
+
+      <div class="ai-sec-ttl">AIチャットを開く</div>
+      <div class="ai-service-row">
+        <button class="ai-svc-btn claude"  data-svc="claude" >Claude</button>
+        <button class="ai-svc-btn chatgpt" data-svc="chatgpt">ChatGPT</button>
+        <button class="ai-svc-btn gemini"  data-svc="gemini" >Gemini</button>
+      </div>
+      <p class="ai-hint">
+        ボタンを押すとプロンプトをコピーしてAIチャットを新しいタブで開きます。<br>
+        チャット欄に貼り付けて送信してください。
+      </p>
+
+      <hr class="ai-divider">
+
+      <!-- Response section -->
+      <div class="ai-sec-ttl">AI の回答を貼り付けて適用</div>
+      <textarea id="ai-response"
+        placeholder="AIの回答をここに貼り付けてください…&#10;&#10;選手の移動提案が含まれていれば自動で反映します。"></textarea>
+      <div class="ai-apply-row">
+        <button id="btn-apply-ai">✅ 選手を移動する</button>
+        <button class="btn-cancel" id="btn-ai-close2">閉じる</button>
+      </div>
+      <p class="ai-format-note">
+        移動指示の形式例：<code>A3: (38, 25)</code>　または　<code>B2 → 12, 50</code>
+      </p>
+
+    </div>
+  </div>
+</div>
+
+<!-- ── Toast ────────────────────────────────────────────────────────────────── -->
+<div id="toast"></div>
 
 <!-- ── Overlay ─────────────────────────────────────────────────────────────── -->
 <div id="overlay"></div>

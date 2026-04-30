@@ -91,7 +91,7 @@ function _shadow(ctx, fn, dx, dy) {
 }
 
 function drawBall(ctx, ball) {
-  const r = 0.58;
+  const r = PLAYER_R * 0.8; // ~0.92m, 80% of player radius
   // shadow
   ctx.save();
   ctx.beginPath();

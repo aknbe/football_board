@@ -427,6 +427,35 @@
     saveToStorage();
   }
 
+  // ── Orientation transform ──────────────────────────────────────────────────
+  // Portrait→Landscape: X=y, Y=W-x  (90° CW rotation, W = portrait field width)
+  // Landscape→Portrait: X=W-y, Y=x  (inverse)
+
+  function _transformPt(x, y, fromOri, W) {
+    return fromOri === 'portrait'
+      ? { x: y,     y: W - x }   // portrait → landscape
+      : { x: W - y, y: x     };  // landscape → portrait
+  }
+
+  function _transformSnapshot(snapshot, fromOri, W) {
+    snapshot.players.forEach(p => {
+      const t = _transformPt(p.x, p.y, fromOri, W);
+      p.x = t.x; p.y = t.y;
+    });
+    const tb = _transformPt(snapshot.ball.x, snapshot.ball.y, fromOri, W);
+    snapshot.ball.x = tb.x; snapshot.ball.y = tb.y;
+    snapshot.drawings.forEach(d => {
+      d.points = d.points.map(pt => _transformPt(pt.x, pt.y, fromOri, W));
+    });
+  }
+
+  function transformAllElements(fromOri, toOri) {
+    if (fromOri === toOri) return;
+    const W = FIELD_SIZES[state.fieldSize].width; // portrait width (50 or 40)
+    _transformSnapshot(state, fromOri, W);
+    state.frames.forEach(f => _transformSnapshot(f, fromOri, W));
+  }
+
   // ── LocalStorage ───────────────────────────────────────────────────────────
   const STORE_KEY = 'football_board_v1';
 
@@ -465,6 +494,134 @@
     } catch (_) { return false; }
   }
 
+  // ── Toast ──────────────────────────────────────────────────────────────────
+  let _toastTimer = null;
+  function showToast(msg, duration = 2500) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    if (_toastTimer) clearTimeout(_toastTimer);
+    _toastTimer = setTimeout(() => el.classList.remove('show'), duration);
+  }
+
+  // ── AI Consultation ────────────────────────────────────────────────────────
+
+  const AI_URLS = {
+    claude:  'https://claude.ai/new',
+    chatgpt: 'https://chatgpt.com/',
+    gemini:  'https://gemini.google.com/app',
+  };
+
+  function buildPrompt() {
+    const { fw, fl } = fieldDims();
+    const fmtTeam = (team) =>
+      state.players
+        .filter(p => p.team === team)
+        .map(p => {
+          const name = p.name ? ` ${p.name}` : '';
+          return `  ${p.role} #${p.number}${name}: (${Math.round(p.x)}m, ${Math.round(p.y)}m)`;
+        })
+        .join('\n');
+
+    return `## 8人制サッカー 作戦ボード — 戦術相談
+
+フィールド: ${fw}m × ${fl}m
+
+### チームA（赤）フォーメーション ${state.formationA}
+${fmtTeam('A')}
+
+### チームB（青）フォーメーション ${state.formationB}
+${fmtTeam('B')}
+
+ボール位置: (${Math.round(state.ball.x)}m, ${Math.round(state.ball.y)}m)
+
+---
+この配置について教えてください：
+1. 現在の配置の強みと弱点
+2. 改善すべき選手の移動提案
+3. 攻撃・守備のポイント
+
+選手の移動提案は必ず以下の形式で記述してください（作戦ボードに自動適用されます）：
+A1: (25, 62)
+A3: (38, 45)
+B2: (12, 20)
+※ フィールド座標の範囲: x = 0〜${fw}m、y = 0〜${fl}m（チームA のゴールは y=${fl}m 側）`;
+  }
+
+  function openAIDlg() {
+    document.getElementById('ai-prompt').value = buildPrompt();
+    document.getElementById('ai-response').value = '';
+    document.getElementById('ai-dlg').classList.add('open');
+  }
+
+  function closeAIDlg() {
+    document.getElementById('ai-dlg').classList.remove('open');
+  }
+
+  async function copyPromptToClipboard() {
+    const text = document.getElementById('ai-prompt').value;
+    try {
+      await navigator.clipboard.writeText(text);
+      showToast('📋 プロンプトをコピーしました');
+      return true;
+    } catch (_) {
+      // Fallback: select the textarea
+      const ta = document.getElementById('ai-prompt');
+      ta.select();
+      document.execCommand('copy');
+      showToast('📋 コピーしました（テキストを選択してCtrl+C）');
+      return false;
+    }
+  }
+
+  async function consultAI(svc) {
+    await copyPromptToClipboard();
+    const url = AI_URLS[svc];
+    if (url) window.open(url, '_blank', 'noopener');
+  }
+
+  function applyAIResponse() {
+    const text = document.getElementById('ai-response').value;
+    if (!text.trim()) {
+      showToast('⚠️ 回答が入力されていません');
+      return;
+    }
+
+    const { fw, fl } = fieldDims();
+    // Match patterns like: A3: (38, 25)  A3:(38,25)  B2 → 12, 50  A3 -> (38 25)
+    const pattern = /([AB])\s*(\d+)\s*[:：→>→\-]+\s*\(?\s*(\d+(?:\.\d+)?)\s*[,、\s]\s*(\d+(?:\.\d+)?)\s*\)?/g;
+    let match, count = 0, skipped = 0;
+
+    while ((match = pattern.exec(text)) !== null) {
+      const [, team, numStr, xStr, yStr] = match;
+      const num = parseInt(numStr, 10);
+      const x   = parseFloat(xStr);
+      const y   = parseFloat(yStr);
+
+      // Validate coordinates within field bounds (with some margin)
+      if (x < -2 || x > fw + 2 || y < -2 || y > fl + 2) { skipped++; continue; }
+
+      const player = state.players.find(p => p.team === team && p.number === num);
+      if (player) {
+        player.x = Math.max(0, Math.min(fw, x));
+        player.y = Math.max(0, Math.min(fl, y));
+        count++;
+      }
+    }
+
+    if (count > 0) {
+      render();
+      saveToStorage();
+      const msg = skipped > 0
+        ? `✅ ${count}人を移動しました（${skipped}件は範囲外でスキップ）`
+        : `✅ ${count}人の選手を移動しました`;
+      showToast(msg, 3000);
+      closeAIDlg();
+    } else {
+      showToast('⚠️ 移動指示が見つかりませんでした。形式を確認してください。');
+    }
+  }
+
   // ── Init ───────────────────────────────────────────────────────────────────
   function init() {
     canvas = document.getElementById('canvas');
@@ -498,7 +655,20 @@
     document.getElementById('btn-save-frame').onclick = saveFrame;
     document.getElementById('btn-play'  ).onclick = togglePlay;
     document.getElementById('btn-frames').onclick = toggleFramePanel;
+    document.getElementById('btn-ai'    ).onclick = openAIDlg;
     document.getElementById('btn-menu'  ).onclick = openMenu;
+
+    // AI dialog
+    document.getElementById('ai-close'      ).onclick = closeAIDlg;
+    document.getElementById('btn-ai-close2' ).onclick = closeAIDlg;
+    document.getElementById('ai-dlg'        ).onclick = e => {
+      if (e.target === document.getElementById('ai-dlg')) closeAIDlg();
+    };
+    document.getElementById('btn-copy-prompt').onclick = copyPromptToClipboard;
+    document.getElementById('btn-apply-ai'  ).onclick = applyAIResponse;
+    document.querySelectorAll('.ai-svc-btn').forEach(btn => {
+      btn.onclick = () => consultAI(btn.dataset.svc);
+    });
 
     document.getElementById('zoom-reset').onclick = () => { resetView(); render(); };
     document.getElementById('overlay'   ).onclick = closeMenu;
@@ -518,12 +688,16 @@
 
     // Orientation
     document.getElementById('btn-portrait' ).onclick = () => {
+      if (state.orientation === 'portrait') return;
+      transformAllElements(state.orientation, 'portrait');
       state.orientation = 'portrait';
-      syncOriBtns(); resetView(); render();
+      syncOriBtns(); resetView(); render(); saveToStorage();
     };
     document.getElementById('btn-landscape').onclick = () => {
+      if (state.orientation === 'landscape') return;
+      transformAllElements(state.orientation, 'landscape');
       state.orientation = 'landscape';
-      syncOriBtns(); resetView(); render();
+      syncOriBtns(); resetView(); render(); saveToStorage();
     };
 
     // Formation
