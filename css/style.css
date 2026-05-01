@@ -25,6 +25,13 @@ canvas#canvas{display:block;position:fixed;top:0;left:0;touch-action:none}
 .tb-sep{width:1px;height:28px;background:rgba(255,255,255,0.12);margin:0 3px;flex-shrink:0}
 .tb-spacer{flex:1}
 
+/* ── MCP status dot ── */
+.mcp-dot{
+  width:8px;height:8px;border-radius:50%;background:#333;
+  flex-shrink:0;margin:0 4px;transition:background .4s,box-shadow .4s;
+}
+.mcp-dot.connected{background:#4caf50;box-shadow:0 0 6px #4caf50}
+
 /* ── Draw sub-toolbar ── */
 #draw-toolbar{
   position:fixed;top:56px;left:0;right:0;height:48px;

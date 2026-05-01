@@ -702,6 +702,127 @@ B2: (12, 20)
     }
   }
 
+  // ── MCP WebSocket Bridge ───────────────────────────────────────────────────
+  function initMCPBridge() {
+    let ws = null;
+    let reconnTimer = null;
+
+    function setStatus(connected) {
+      const el = document.getElementById('mcp-status');
+      if (el) el.className = 'mcp-dot' + (connected ? ' connected' : '');
+    }
+
+    function reply(requestId, data, error) {
+      if (!ws || ws.readyState !== 1) return;
+      ws.send(JSON.stringify(error ? { requestId, error } : { requestId, data }));
+    }
+
+    function handleCommand(msg) {
+      const { type, requestId } = msg;
+      try {
+        switch (type) {
+          case 'get_state': {
+            const { fw, fl } = fieldDims();
+            reply(requestId, {
+              fieldSize:   state.fieldSize,
+              orientation: state.orientation,
+              fieldWidth:  fw,
+              fieldLength: fl,
+              formationA:  state.formationA,
+              formationB:  state.formationB,
+              ball:        { x: +state.ball.x.toFixed(1), y: +state.ball.y.toFixed(1) },
+              frameCount:  state.frames.length,
+              players: state.players.map(p => ({
+                id: p.id, team: p.team, number: p.number,
+                name: p.name, role: p.role,
+                x: +p.x.toFixed(1), y: +p.y.toFixed(1),
+              })),
+            });
+            break;
+          }
+          case 'move_player': {
+            const { fw, fl } = fieldDims();
+            const player = state.players.find(
+              p => p.team === msg.team && p.number === msg.number
+            );
+            if (!player) throw new Error(`プレイヤー ${msg.team}${msg.number} が見つかりません`);
+            pushHistory();
+            player.x = Math.max(0, Math.min(fw, msg.x));
+            player.y = Math.max(0, Math.min(fl, msg.y));
+            render(); saveToStorage();
+            reply(requestId, { success: true });
+            break;
+          }
+          case 'move_ball': {
+            const { fw, fl } = fieldDims();
+            pushHistory();
+            state.ball.x = Math.max(0, Math.min(fw, msg.x));
+            state.ball.y = Math.max(0, Math.min(fl, msg.y));
+            render(); saveToStorage();
+            reply(requestId, { success: true });
+            break;
+          }
+          case 'set_formation': {
+            const { fw, fl } = fieldDims();
+            const sel = document.getElementById(msg.team === 'A' ? 'sel-fa' : 'sel-fb');
+            if (sel) sel.value = msg.formation;
+            if (msg.team === 'A') state.formationA = msg.formation;
+            else                  state.formationB = msg.formation;
+            pushHistory();
+            applyFormation(
+              state.players.filter(p => p.team === msg.team),
+              msg.formation, fw, fl
+            );
+            render(); saveToStorage();
+            reply(requestId, { success: true });
+            break;
+          }
+          case 'save_frame':
+            saveFrame();
+            reply(requestId, { frameCount: state.frames.length });
+            break;
+          case 'reset_ball': {
+            const { fw, fl } = fieldDims();
+            pushHistory();
+            state.ball = { x: fw / 2, y: fl / 2 };
+            render(); saveToStorage();
+            reply(requestId, { success: true });
+            break;
+          }
+          case 'clear_drawings':
+            pushHistory();
+            state.drawings = [];
+            render(); saveToStorage();
+            reply(requestId, { success: true });
+            break;
+          default:
+            reply(requestId, null, `不明なコマンド: ${type}`);
+        }
+      } catch (err) {
+        reply(requestId, null, err.message);
+      }
+    }
+
+    function connect() {
+      try { ws = new WebSocket('ws://localhost:3001'); }
+      catch (_) { scheduleReconnect(); return; }
+
+      ws.onopen  = () => { setStatus(true);  console.log('[MCP] 接続'); };
+      ws.onclose = () => { setStatus(false); scheduleReconnect(); };
+      ws.onerror = () => {};
+      ws.onmessage = ev => {
+        try { handleCommand(JSON.parse(ev.data)); } catch (_) {}
+      };
+    }
+
+    function scheduleReconnect() {
+      clearTimeout(reconnTimer);
+      reconnTimer = setTimeout(connect, 4000);
+    }
+
+    connect();
+  }
+
   // ── Init ───────────────────────────────────────────────────────────────────
   function init() {
     canvas = document.getElementById('canvas');
@@ -882,6 +1003,7 @@ B2: (12, 20)
 
     syncUI();
     render();
+    initMCPBridge();
   }
 
   function syncFieldSizeBtns() {
