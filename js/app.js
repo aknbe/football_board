@@ -20,6 +20,7 @@
     animSpeed:   1.5,    // seconds per transition
     colorA:      '#e53935',
     colorB:      '#1e88e5',
+    locked:      false,
   };
 
   // ── View (CSS-pixel space) ─────────────────────────────────────────────────
@@ -57,6 +58,20 @@
     view.offsetX = cx - m.x * view.scale;
     view.offsetY = cy - m.y * view.scale;
     document.getElementById('zoom-reset').classList.add('visible');
+  }
+
+  // Enforce min-zoom (field fills ≥1 screen dimension) and pan limits (no excess whitespace)
+  function clampView() {
+    const { fw, fl } = fieldDims();
+    const W = window.innerWidth, H = window.innerHeight;
+    const TOPPAD = 64;
+    const minS = Math.min(W / fw, (H - TOPPAD) / fl);
+    view.scale = Math.max(view.scale, minS);
+    const fw_px = fw * view.scale, fl_px = fl * view.scale;
+    const xMin = Math.min(0, W - fw_px),       xMax = Math.max(0, W - fw_px);
+    const yMin = Math.min(TOPPAD, H - fl_px),  yMax = Math.max(TOPPAD, H - fl_px);
+    view.offsetX = Math.max(xMin, Math.min(xMax, view.offsetX));
+    view.offsetY = Math.max(yMin, Math.min(yMax, view.offsetY));
   }
 
   // ── Canvas ─────────────────────────────────────────────────────────────────
@@ -159,15 +174,17 @@
 
     if (pointers.size === 2) {
       dragTarget = null; isPanning = false; clearLP();
-      const pts = [...pointers.values()];
-      pinchStart = {
-        dist: Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y),
-        midX: (pts[0].x + pts[1].x) / 2,
-        midY: (pts[0].y + pts[1].y) / 2,
-        scale: view.scale,
-        ox: view.offsetX,
-        oy: view.offsetY,
-      };
+      if (!state.locked) {
+        const pts = [...pointers.values()];
+        pinchStart = {
+          dist: Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y),
+          midX: (pts[0].x + pts[1].x) / 2,
+          midY: (pts[0].y + pts[1].y) / 2,
+          scale: view.scale,
+          ox: view.offsetX,
+          oy: view.offsetY,
+        };
+      }
       return;
     }
 
@@ -198,7 +215,7 @@
         editTarget = hit.obj;
         longTimer  = setTimeout(() => { openPlayerDlg(hit.obj); dragTarget = null; clearLP(); }, 550);
       }
-    } else {
+    } else if (!state.locked) {
       isPanning = true;
       panAnchor = { x: cp.x - view.offsetX, y: cp.y - view.offsetY };
     }
@@ -212,6 +229,7 @@
     if (anim.isPlaying) return;
 
     if (pointers.size === 2 && pinchStart) {
+      if (state.locked) return;
       const pts  = [...pointers.values()];
       const dist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
       const midX = (pts[0].x + pts[1].x) / 2;
@@ -223,6 +241,7 @@
       view.offsetX = midX - fmx * newScale;
       view.offsetY = midY - fmy * newScale;
       document.getElementById('zoom-reset').classList.add('visible');
+      clampView();
       render(); return;
     }
 
@@ -253,6 +272,7 @@
       view.offsetX = cp.x - panAnchor.x;
       view.offsetY = cp.y - panAnchor.y;
       document.getElementById('zoom-reset').classList.add('visible');
+      clampView();
       render();
     }
   }
@@ -283,9 +303,11 @@
 
   function onWheel(e) {
     e.preventDefault();
+    if (state.locked) return;
     const cp     = canvasXY(e);
     const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
     zoomAt(cp.x, cp.y, factor);
+    clampView();
     render();
   }
 
@@ -509,6 +531,7 @@
         animSpeed:   state.animSpeed,
         colorA:      state.colorA,
         colorB:      state.colorB,
+        locked:      state.locked,
       }));
     } catch (_) {}
   }
@@ -529,6 +552,7 @@
         animSpeed:   d.animSpeed   || 1.5,
         colorA:      d.colorA      || '#e53935',
         colorB:      d.colorB      || '#1e88e5',
+        locked:      d.locked      ?? false,
       });
       return state.players.length > 0;
     } catch (_) { return false; }
@@ -1020,6 +1044,13 @@ B2: (12, 20)
       if (e.target === document.getElementById('player-dlg')) closePlayerDlg();
     };
 
+    // Lock toggle
+    const lockChk = document.getElementById('chk-lock');
+    if (lockChk) {
+      lockChk.checked  = state.locked;
+      lockChk.onchange = () => { state.locked = lockChk.checked; saveToStorage(); };
+    }
+
     // Team color pickers
     const colorPickA = document.getElementById('color-a');
     const colorPickB = document.getElementById('color-b');
@@ -1056,10 +1087,12 @@ B2: (12, 20)
     document.getElementById('sel-fb').value = state.formationB;
     document.getElementById('speed-slider').value = state.animSpeed;
     document.getElementById('speed-label').textContent = state.animSpeed + 's';
-    const ca = document.getElementById('color-a');
-    const cb = document.getElementById('color-b');
-    if (ca) ca.value = state.colorA;
-    if (cb) cb.value = state.colorB;
+    const ca  = document.getElementById('color-a');
+    const cb  = document.getElementById('color-b');
+    const lck = document.getElementById('chk-lock');
+    if (ca)  ca.value  = state.colorA;
+    if (cb)  cb.value  = state.colorB;
+    if (lck) lck.checked = state.locked;
     // Default draw options
     const firstColor = document.querySelector(`.color-swatch[data-color="${state.drawColor}"]`);
     if (firstColor) firstColor.classList.add('active');

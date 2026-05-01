@@ -156,6 +156,24 @@ canvas#canvas{display:block;position:fixed;top:0;left:0;touch-action:none}
 .menu-row input[type=range]{flex:1;accent-color:#4caf50}
 .menu-row span{color:#bbb;font-size:12px;min-width:30px;text-align:right}
 
+/* ── Toggle switch ── */
+.toggle-row{display:flex;align-items:center;justify-content:space-between;padding:2px 0}
+.toggle-label{color:#bbb;font-size:12.5px}
+.toggle-sw{position:relative;display:inline-block;width:42px;height:24px;flex-shrink:0}
+.toggle-sw input{opacity:0;width:0;height:0;position:absolute}
+.toggle-track{
+  position:absolute;inset:0;background:rgba(255,255,255,0.1);
+  border-radius:12px;cursor:pointer;transition:background .2s;
+  border:1px solid rgba(255,255,255,0.15);
+}
+.toggle-track::before{
+  content:'';position:absolute;top:3px;left:3px;
+  width:16px;height:16px;border-radius:50%;
+  background:#888;transition:transform .2s,background .2s;
+}
+.toggle-sw input:checked + .toggle-track{background:rgba(76,175,80,0.35);border-color:#4caf50}
+.toggle-sw input:checked + .toggle-track::before{transform:translateX(18px);background:#4caf50}
+
 /* ── Team color picker ── */
 .color-pick-row{display:flex;align-items:center;gap:10px;margin-bottom:8px}
 .color-pick-row label{color:#888;font-size:12px;flex:1}
