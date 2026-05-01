@@ -1,31 +1,32 @@
 'use strict';
 
 // Relative positions (x: 0-1 across width, y: 0-1 from own goal to midfield)
+// GK≈9m, DF≈14m, MF=midpoint(DF,FW), FW=halfway-2m  (large field half=34m)
 const FORMATIONS = {
   '3-3-1': [
-    { x: 0.50, y: 0.06, role: 'GK' },
-    { x: 0.20, y: 0.28, role: 'DF' }, { x: 0.50, y: 0.28, role: 'DF' }, { x: 0.80, y: 0.28, role: 'DF' },
-    { x: 0.20, y: 0.56, role: 'MF' }, { x: 0.50, y: 0.56, role: 'MF' }, { x: 0.80, y: 0.56, role: 'MF' },
-    { x: 0.50, y: 0.84, role: 'FW' },
+    { x: 0.50, y: 0.26, role: 'GK' },
+    { x: 0.20, y: 0.41, role: 'DF' }, { x: 0.50, y: 0.41, role: 'DF' }, { x: 0.80, y: 0.41, role: 'DF' },
+    { x: 0.20, y: 0.67, role: 'MF' }, { x: 0.50, y: 0.67, role: 'MF' }, { x: 0.80, y: 0.67, role: 'MF' },
+    { x: 0.50, y: 0.94, role: 'FW' },
   ],
   '2-4-1': [
-    { x: 0.50, y: 0.06, role: 'GK' },
-    { x: 0.30, y: 0.28, role: 'DF' }, { x: 0.70, y: 0.28, role: 'DF' },
-    { x: 0.15, y: 0.56, role: 'MF' }, { x: 0.38, y: 0.56, role: 'MF' },
-    { x: 0.62, y: 0.56, role: 'MF' }, { x: 0.85, y: 0.56, role: 'MF' },
-    { x: 0.50, y: 0.84, role: 'FW' },
+    { x: 0.50, y: 0.26, role: 'GK' },
+    { x: 0.30, y: 0.41, role: 'DF' }, { x: 0.70, y: 0.41, role: 'DF' },
+    { x: 0.15, y: 0.67, role: 'MF' }, { x: 0.38, y: 0.67, role: 'MF' },
+    { x: 0.62, y: 0.67, role: 'MF' }, { x: 0.85, y: 0.67, role: 'MF' },
+    { x: 0.50, y: 0.94, role: 'FW' },
   ],
   '2-3-2': [
-    { x: 0.50, y: 0.06, role: 'GK' },
-    { x: 0.30, y: 0.28, role: 'DF' }, { x: 0.70, y: 0.28, role: 'DF' },
-    { x: 0.20, y: 0.56, role: 'MF' }, { x: 0.50, y: 0.56, role: 'MF' }, { x: 0.80, y: 0.56, role: 'MF' },
-    { x: 0.35, y: 0.84, role: 'FW' }, { x: 0.65, y: 0.84, role: 'FW' },
+    { x: 0.50, y: 0.26, role: 'GK' },
+    { x: 0.30, y: 0.41, role: 'DF' }, { x: 0.70, y: 0.41, role: 'DF' },
+    { x: 0.20, y: 0.67, role: 'MF' }, { x: 0.50, y: 0.67, role: 'MF' }, { x: 0.80, y: 0.67, role: 'MF' },
+    { x: 0.35, y: 0.94, role: 'FW' }, { x: 0.65, y: 0.94, role: 'FW' },
   ],
   '3-2-2': [
-    { x: 0.50, y: 0.06, role: 'GK' },
-    { x: 0.20, y: 0.28, role: 'DF' }, { x: 0.50, y: 0.28, role: 'DF' }, { x: 0.80, y: 0.28, role: 'DF' },
-    { x: 0.35, y: 0.56, role: 'MF' }, { x: 0.65, y: 0.56, role: 'MF' },
-    { x: 0.35, y: 0.84, role: 'FW' }, { x: 0.65, y: 0.84, role: 'FW' },
+    { x: 0.50, y: 0.26, role: 'GK' },
+    { x: 0.20, y: 0.41, role: 'DF' }, { x: 0.50, y: 0.41, role: 'DF' }, { x: 0.80, y: 0.41, role: 'DF' },
+    { x: 0.35, y: 0.67, role: 'MF' }, { x: 0.65, y: 0.67, role: 'MF' },
+    { x: 0.35, y: 0.94, role: 'FW' }, { x: 0.65, y: 0.94, role: 'FW' },
   ],
 };
 
@@ -156,4 +157,45 @@ function drawPlayer(ctx, p) {
 function drawPlayers(ctx, players, ball) {
   drawBall(ctx, ball);
   players.forEach(p => drawPlayer(ctx, p));
+}
+
+// ── Team color derivation ─────────────────────────────────────────────────
+
+function deriveTeamColors(hex) {
+  const r = parseInt(hex.slice(1,3),16)/255;
+  const g = parseInt(hex.slice(3,5),16)/255;
+  const b = parseInt(hex.slice(5,7),16)/255;
+  const max = Math.max(r,g,b), min = Math.min(r,g,b), d = max - min;
+  let h = 0, s = 0;
+  const l = (max + min) / 2;
+  if (d) {
+    s = l > .5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break;
+      case g: h = ((b - r) / d + 2) / 6; break;
+      case b: h = ((r - g) / d + 4) / 6; break;
+    }
+  }
+  function hsl2hex(hh, ss, ll) {
+    if (!ss) {
+      const v = Math.round(Math.max(0, Math.min(1, ll)) * 255);
+      return '#' + [v,v,v].map(x => x.toString(16).padStart(2,'0')).join('');
+    }
+    const q = ll < .5 ? ll*(1+ss) : ll+ss-ll*ss, p = 2*ll - q;
+    const hue = t => {
+      if (t < 0) t += 1; if (t > 1) t -= 1;
+      if (t < 1/6) return p + (q-p)*6*t;
+      if (t < .5)  return q;
+      if (t < 2/3) return p + (q-p)*(2/3-t)*6;
+      return p;
+    };
+    return '#' + [hue(hh+1/3), hue(hh), hue(hh-1/3)]
+      .map(v => Math.round(Math.max(0,Math.min(1,v))*255).toString(16).padStart(2,'0')).join('');
+  }
+  const fill     = hex;
+  const stroke   = hsl2hex(h, s, Math.max(l * 0.62, 0.04));
+  const gkFill   = hsl2hex((h + 0.10) % 1, Math.min(s * 1.1, 1), Math.min(l + 0.12, 0.80));
+  const gkStroke = hsl2hex((h + 0.10) % 1, Math.min(s * 1.1, 1), Math.max(l * 0.62, 0.04));
+  const text     = l > 0.55 ? '#111' : '#fff';
+  return { fill, stroke, gkFill, gkStroke, text };
 }

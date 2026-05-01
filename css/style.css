@@ -156,6 +156,50 @@ canvas#canvas{display:block;position:fixed;top:0;left:0;touch-action:none}
 .menu-row input[type=range]{flex:1;accent-color:#4caf50}
 .menu-row span{color:#bbb;font-size:12px;min-width:30px;text-align:right}
 
+/* ── Team color picker ── */
+.color-pick-row{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.color-pick-row label{color:#888;font-size:12px;flex:1}
+.color-pick-row input[type=color]{
+  width:44px;height:30px;border:1px solid rgba(255,255,255,0.2);
+  border-radius:7px;background:rgba(255,255,255,0.04);
+  cursor:pointer;padding:2px 3px;
+}
+
+/* ── Help sections ── */
+.help-sec{border-bottom:1px solid rgba(255,255,255,0.05);padding:10px 16px}
+.help-sec summary{
+  color:#777;font-size:10.5px;font-weight:600;text-transform:uppercase;
+  letter-spacing:.07em;cursor:pointer;list-style:none;outline:none;
+}
+.help-sec summary::-webkit-details-marker{display:none}
+.help-sec[open] summary{color:#aaa;margin-bottom:10px}
+.help-body{color:#555;font-size:11px;line-height:1.8}
+.help-body p{margin-bottom:3px}
+.help-body b{color:#777}
+.help-body pre{
+  background:rgba(255,255,255,0.04);border-radius:6px;
+  padding:8px;font-size:10px;color:#777;
+  margin:4px 0 8px;white-space:pre-wrap;overflow-x:auto;
+}
+.help-body code{
+  background:rgba(255,255,255,0.06);color:#888;
+  padding:1px 4px;border-radius:3px;font-size:10px;
+}
+.help-body ul{padding-left:14px}
+.help-body li{margin-bottom:2px}
+
+/* ── Save flash (invert effect) ── */
+#save-flash{
+  position:fixed;inset:0;z-index:500;
+  background:#fff;pointer-events:none;
+  opacity:0;mix-blend-mode:difference;
+}
+@keyframes board-flash{
+  0%  {opacity:.80}
+  100%{opacity:0}
+}
+#save-flash.flash{animation:board-flash .35s ease-out forwards}
+
 /* ── Overlay ── */
 #overlay{position:fixed;inset:0;z-index:150;display:none;background:rgba(0,0,0,0.25)}
 #overlay.active{display:block}

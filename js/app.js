@@ -18,6 +18,8 @@
     drawStyle:   'solid',
     drawWidth:   'medium',
     animSpeed:   1.5,    // seconds per transition
+    colorA:      '#e53935',
+    colorB:      '#1e88e5',
   };
 
   // ── View (CSS-pixel space) ─────────────────────────────────────────────────
@@ -297,6 +299,13 @@
     });
     renderFrameList();
     saveToStorage();
+    // Flash inversion effect
+    const flash = document.getElementById('save-flash');
+    if (flash) {
+      flash.classList.remove('flash');
+      void flash.offsetWidth; // force reflow
+      flash.classList.add('flash');
+    }
   }
 
   function deleteFrame(id) {
@@ -498,6 +507,8 @@
         drawings:    state.drawings,
         frames:      state.frames,
         animSpeed:   state.animSpeed,
+        colorA:      state.colorA,
+        colorB:      state.colorB,
       }));
     } catch (_) {}
   }
@@ -516,6 +527,8 @@
         drawings:    d.drawings    || [],
         frames:      d.frames      || [],
         animSpeed:   d.animSpeed   || 1.5,
+        colorA:      d.colorA      || '#e53935',
+        colorB:      d.colorB      || '#1e88e5',
       });
       return state.players.length > 0;
     } catch (_) { return false; }
@@ -582,6 +595,12 @@
     el.classList.add('show');
     if (_toastTimer) clearTimeout(_toastTimer);
     _toastTimer = setTimeout(() => el.classList.remove('show'), duration);
+  }
+
+  // ── Team colors ───────────────────────────────────────────────────────────
+  function applyTeamColors() {
+    Object.assign(TEAM_COLORS.A, deriveTeamColors(state.colorA));
+    Object.assign(TEAM_COLORS.B, deriveTeamColors(state.colorB));
   }
 
   // ── AI Consultation ────────────────────────────────────────────────────────
@@ -946,7 +965,7 @@ B2: (12, 20)
       setTimeout(() => { b.textContent = 'ブラウザに保存'; }, 1800);
     };
     document.getElementById('btn-load').onclick = () => {
-      if (loadFromStorage()) { clearHistory(); syncUI(); render(); renderFrameList(); }
+      if (loadFromStorage()) { clearHistory(); syncUI(); applyTeamColors(); render(); renderFrameList(); }
     };
 
     // Animation speed
@@ -1001,7 +1020,20 @@ B2: (12, 20)
       if (e.target === document.getElementById('player-dlg')) closePlayerDlg();
     };
 
+    // Team color pickers
+    const colorPickA = document.getElementById('color-a');
+    const colorPickB = document.getElementById('color-b');
+    if (colorPickA) {
+      colorPickA.value    = state.colorA;
+      colorPickA.oninput  = () => { state.colorA = colorPickA.value; applyTeamColors(); render(); saveToStorage(); };
+    }
+    if (colorPickB) {
+      colorPickB.value    = state.colorB;
+      colorPickB.oninput  = () => { state.colorB = colorPickB.value; applyTeamColors(); render(); saveToStorage(); };
+    }
+
     syncUI();
+    applyTeamColors();
     render();
     initMCPBridge();
   }
@@ -1024,6 +1056,10 @@ B2: (12, 20)
     document.getElementById('sel-fb').value = state.formationB;
     document.getElementById('speed-slider').value = state.animSpeed;
     document.getElementById('speed-label').textContent = state.animSpeed + 's';
+    const ca = document.getElementById('color-a');
+    const cb = document.getElementById('color-b');
+    if (ca) ca.value = state.colorA;
+    if (cb) cb.value = state.colorB;
     // Default draw options
     const firstColor = document.querySelector(`.color-swatch[data-color="${state.drawColor}"]`);
     if (firstColor) firstColor.classList.add('active');

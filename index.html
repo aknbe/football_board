@@ -34,13 +34,16 @@
 
 <!-- ── Draw sub-toolbar ───────────────────────────────────────────────────── -->
 <div id="draw-toolbar">
-  <!-- 6 colors -->
+  <!-- 9 colors -->
   <button class="color-swatch" data-color="#ffffff" style="background:#fff"    title="白"></button>
   <button class="color-swatch" data-color="#ffeb3b" style="background:#ffeb3b" title="黄"></button>
   <button class="color-swatch" data-color="#f44336" style="background:#f44336" title="赤"></button>
   <button class="color-swatch" data-color="#00bcd4" style="background:#00bcd4" title="水色"></button>
   <button class="color-swatch" data-color="#76ff03" style="background:#76ff03" title="黄緑"></button>
   <button class="color-swatch" data-color="#ff9800" style="background:#ff9800" title="橙"></button>
+  <button class="color-swatch" data-color="#212121" style="background:#212121;border:1px solid #555" title="黒"></button>
+  <button class="color-swatch" data-color="#0d47a1" style="background:#0d47a1" title="濃青"></button>
+  <button class="color-swatch" data-color="#e040fb" style="background:#e040fb" title="マゼンタ"></button>
   <div class="tb-sep"></div>
   <!-- line style -->
   <button class="ds-btn" data-style="solid"  title="実線">─</button>
@@ -69,7 +72,7 @@
     <div class="menu-sec-ttl">フィールドサイズ</div>
     <div class="opt-grp">
       <button class="opt-btn active" id="btn-large">50 × 68 m</button>
-      <button class="opt-btn"        id="btn-small">40 × 58 m</button>
+      <button class="opt-btn"        id="btn-small">40 × 56 m</button>
     </div>
   </div>
 
@@ -100,6 +103,18 @@
   </div>
 
   <div class="menu-sec">
+    <div class="menu-sec-ttl">チームカラー</div>
+    <div class="color-pick-row">
+      <label>チーム A（下）</label>
+      <input type="color" id="color-a" value="#e53935">
+    </div>
+    <div class="color-pick-row">
+      <label>チーム B（上）</label>
+      <input type="color" id="color-b" value="#1e88e5">
+    </div>
+  </div>
+
+  <div class="menu-sec">
     <div class="menu-sec-ttl">アニメーション速度</div>
     <div class="menu-row">
       <label>移動時間</label>
@@ -121,14 +136,55 @@
     <button class="menu-btn"         id="btn-load">保存データを読み込む</button>
   </div>
 
-  <div class="menu-sec" style="color:#555;font-size:11px;line-height:1.7;padding-bottom:20px">
-    <strong style="color:#666">操作ヒント</strong><br>
-    プレイヤー長押し → 番号・名前編集<br>
-    ✏️ 描画モードで線を描く<br>
-    🗑 消去モードでドラッグ消去<br>
-    📷 でフレーム保存 → ▶ で再生<br>
-    ピンチ / ホイールでズーム
-  </div>
+  <!-- 操作ヘルプ -->
+  <details class="help-sec">
+    <summary>操作ヘルプ</summary>
+    <div class="help-body">
+      <p>✋ <b>移動モード</b>: プレイヤー / ボールをドラッグ</p>
+      <p>✏️ <b>描画モード</b>: フィールドに作戦線を引く</p>
+      <p>🗑 <b>消去モード</b>: 描画線をクリック / ドラッグで消去</p>
+      <p>👆 <b>長押し</b>: プレイヤーの番号・名前を編集</p>
+      <p>📷 フレーム保存 → ▶ アニメーション再生</p>
+      <p>🎞 フレーム一覧でサムネイルを管理</p>
+      <p>ピンチ / マウスホイール: ズーム</p>
+      <p>⌂ ズームリセット</p>
+      <p>↩ <b>Ctrl+Z</b>: 元に戻す</p>
+      <p>↪ <b>Ctrl+Shift+Z</b>: やり直す</p>
+    </div>
+  </details>
+
+  <!-- MCP ヘルプ -->
+  <details class="help-sec" style="padding-bottom:20px">
+    <summary>MCP サーバーヘルプ</summary>
+    <div class="help-body">
+      <p>MCPサーバーを起動するとAIクライアントから作戦ボードを直接操作できます。</p>
+      <p><b>起動:</b></p>
+      <pre>cd mcp-server
+npm install
+npm start</pre>
+      <p>ツールバーの <span style="color:#4caf50">●</span> が緑になれば接続済み。</p>
+      <p><b>Claude Desktop 設定</b> <code>claude_desktop_config.json</code>:</p>
+      <pre>{
+  "mcpServers": {
+    "football-board": {
+      "type": "http",
+      "url": "http://localhost:3000/mcp"
+    }
+  }
+}</pre>
+      <p><b>利用可能なツール:</b></p>
+      <ul>
+        <li><code>get_board_state</code> — 配置・設定を取得</li>
+        <li><code>move_player</code> — プレイヤーを移動</li>
+        <li><code>move_ball</code> — ボールを移動</li>
+        <li><code>set_formation</code> — フォーメーション変更</li>
+        <li><code>save_frame</code> — フレーム保存</li>
+        <li><code>reset_ball</code> — ボールをセンターへ</li>
+        <li><code>clear_drawings</code> — 描画線を消去</li>
+      </ul>
+    </div>
+  </details>
+
 </div>
 
 <!-- ── AI consultation dialog ─────────────────────────────────────────────── -->
@@ -187,6 +243,9 @@
 
 <!-- ── Play indicator ─────────────────────────────────────────────────────── -->
 <div id="play-ind">▶ 再生中…</div>
+
+<!-- ── Save flash (invert effect) ────────────────────────────────────────── -->
+<div id="save-flash"></div>
 
 <!-- ── Player edit dialog ──────────────────────────────────────────────────── -->
 <div id="player-dlg">

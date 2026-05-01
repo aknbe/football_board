@@ -2,7 +2,7 @@
 
 const FIELD_SIZES = {
   large: { width: 50, length: 68 },
-  small: { width: 40, length: 58 },
+  small: { width: 40, length: 56 },
 };
 
 // Field marking dimensions (meters, 8-a-side official)
