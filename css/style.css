@@ -8,9 +8,19 @@ canvas#canvas{display:block;position:fixed;top:0;left:0;touch-action:none}
 #toolbar{
   position:fixed;top:0;left:0;right:0;height:56px;
   background:rgba(16,16,16,0.96);backdrop-filter:blur(12px);
-  display:flex;align-items:center;padding:0 4px;gap:2px;
+  display:flex;align-items:center;padding:0 4px;gap:4px;
   border-bottom:1px solid rgba(255,255,255,0.1);z-index:100;
 }
+
+/* Scrollable button area — fills remaining space, scrolls horizontally */
+#tool-scroll{
+  flex:1;min-width:0;
+  display:flex;align-items:center;gap:2px;
+  overflow-x:auto;overflow-y:hidden;
+  -webkit-overflow-scrolling:touch;
+  scrollbar-width:none;
+}
+#tool-scroll::-webkit-scrollbar{display:none}
 .tb-btn{
   min-width:38px;height:44px;border:none;background:transparent;
   color:#999;border-radius:8px;cursor:pointer;display:flex;align-items:center;
@@ -22,8 +32,7 @@ canvas#canvas{display:block;position:fixed;top:0;left:0;touch-action:none}
 .tb-btn:hover{background:rgba(255,255,255,0.1)}
 .tb-btn.active{background:rgba(255,255,255,0.18);color:#fff}
 .tb-btn.playing{color:#4caf50}
-.tb-sep{width:1px;height:28px;background:rgba(255,255,255,0.12);margin:0 3px;flex-shrink:0}
-.tb-spacer{flex:1}
+.tb-sep{width:1px;height:28px;background:rgba(255,255,255,0.12);margin:0 2px;flex-shrink:0}
 
 /* ── MCP status dot ── */
 .mcp-dot{
