@@ -8,6 +8,7 @@
   <meta name="theme-color" content="#111111">
   <title>作戦ボード</title>
   <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/chat-style.css">
 </head>
 <body>
 
@@ -28,6 +29,7 @@
     <button id="btn-frames" class="tb-btn" title="フレーム一覧">🎞</button>
     <div class="tb-sep"></div>
     <button id="btn-ai"    class="tb-btn" title="AIに相談">🤖</button>
+    <button id="btn-litert-chat" class="tb-btn" title="LiteRTチャット">⚙️</button>
   </div>
   <div id="mcp-status" class="mcp-dot" title="MCPサーバー（未接続）"></div>
   <button id="btn-menu"  class="tb-btn" title="メニュー">☰</button>
@@ -278,7 +280,31 @@ npm start</pre>
   </div>
 </div>
 
+<!-- ── LiteRT チャットパネル ────────────────────────────────────────── -->
+<div id="litert-chat-panel" class="chat-panel">
+  <div class="chat-header">
+    <h3>⚙️ LiteRT チャット</h3>
+    <span id="chat-status" class="chat-status-badge">初期化中...</span>
+    <button id="chat-close-btn" class="chat-close-btn">✕</button>
+  </div>
+  <div id="chat-messages" class="chat-messages"></div>
+  <div class="chat-input-wrapper">
+    <input 
+      type="text" 
+      id="chat-input" 
+      class="chat-input" 
+      placeholder="戦術について質問..."
+      disabled
+    >
+    <button id="chat-send-btn" class="chat-send-btn" disabled>送信</button>
+  </div>
+  <div id="chat-info" class="chat-info">
+    <small>Gemma 4 (WebGPU)でローカル推論</small>
+  </div>
+</div>
+
 <script src="js/field.js"></script>
+<script type="module" src="js/litert-chat.js"></script>
 <script src="js/player.js"></script>
 <script src="js/drawing.js"></script>
 <script src="js/animation.js"></script>
