@@ -902,6 +902,24 @@ B2: (12, 20)
     document.getElementById('btn-ai'    ).onclick = openAIDlg;
     document.getElementById('btn-menu'  ).onclick = openMenu;
 
+    // ──── LiteRT チャット統合 ────
+    document.getElementById('btn-litert-chat').onclick = toggleLiteRTChat;
+    document.getElementById('chat-close-btn').onclick = () => {
+      document.getElementById('litert-chat-panel').classList.remove('open');
+    };
+    document.getElementById('chat-send-btn').onclick = sendChatMessage;
+    document.getElementById('chat-input').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendChatMessage();
+      }
+    });
+
+    // ウィンドウを閉じる前にリソース解放
+    window.addEventListener('beforeunload', async () => {
+      await window.litertChat.cleanup();
+    });
+
     // AI dialog
     document.getElementById('ai-close'      ).onclick = closeAIDlg;
     document.getElementById('btn-ai-close2' ).onclick = closeAIDlg;
@@ -1067,6 +1085,7 @@ B2: (12, 20)
     applyTeamColors();
     render();
     initMCPBridge();
+    initLiteRTChat(); // LiteRT チャットバックグラウンド初期化
   }
 
   function syncFieldSizeBtns() {
@@ -1103,4 +1122,121 @@ B2: (12, 20)
 
   document.addEventListener('DOMContentLoaded', init);
 
+  // ──── LiteRT チャット関数 ────────────────────────────────────────────
+
+  function toggleLiteRTChat() {
+    const panel = document.getElementById('litert-chat-panel');
+    panel.classList.toggle('open');
+    if (panel.classList.contains('open')) {
+      document.getElementById('chat-input').focus();
+    }
+  }
+
+  async function initLiteRTChat() {
+    const success = await window.litertChat.initialize();
+    if (success) {
+      document.getElementById('chat-input').disabled = false;
+      document.getElementById('chat-send-btn').disabled = false;
+      addChatMessage('LiteRTチャットの準備ができました。戦術について質問してください。', 'system');
+    } else {
+      addChatMessage('⚠️ LiteRTチャットの初期化に失敗しました。ブラウザがWebGPUをサポートしているか確認してください。', 'system');
+    }
+  }
+
+  async function sendChatMessage() {
+    const input = document.getElementById('chat-input');
+    const userMsg = input.value.trim();
+
+    if (!userMsg || !window.litertChat.isReady) return;
+
+    // ユーザーメッセージ表示
+    addChatMessage(userMsg, 'user');
+    input.value = '';
+    input.disabled = true;
+    document.getElementById('chat-send-btn').disabled = true;
+
+    // AI応答取得
+    const response = await window.litertChat.sendMessage(
+      window.litertChat.buildTacticalPrompt(state, fieldDims())
+    );
+
+    input.disabled = false;
+    document.getElementById('chat-send-btn').disabled = false;
+
+    if (response) {
+      addChatMessage(response, 'assistant');
+
+      // 移動コマンド自動抽出
+      const moves = window.litertChat.extractMoveCommands(response);
+      if (moves.length > 0) {
+        showAutoApplyPrompt(moves, response);
+      }
+    } else {
+      addChatMessage('⚠️ 応答生成に失敗しました', 'system');
+    }
+  }
+
+  function addChatMessage(text, role) {
+    const msgDiv = document.createElement('div');
+    msgDiv.className = `chat-message ${role}`;
+    msgDiv.textContent = text;
+
+    const messagesDiv = document.getElementById('chat-messages');
+    messagesDiv.appendChild(msgDiv);
+
+    // 自動スクロール
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+  }
+
+  function showAutoApplyPrompt(moves, fullResponse) {
+    const dlg = document.createElement('div');
+    dlg.className = 'auto-apply-dialog';
+    dlg.innerHTML = `
+      <div class="auto-apply-box">
+        <div class="auto-apply-title">提案された移動を適用</div>
+        <div class="auto-apply-content">
+          <p>${moves.length}人の選手を移動します:</p>
+          <p style="font-size: 11px; color: #999;">
+            ${moves.map(m => `${m.team}${m.number}→(${m.x},${m.y})`).join(' ')}
+          </p>
+        </div>
+        <div class="auto-apply-btns">
+          <button class="btn-apply">✓ 適用</button>
+          <button class="btn-cancel">キャンセル</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(dlg);
+
+    dlg.querySelector('.btn-apply').onclick = () => {
+      applyMoveCommands(moves);
+      dlg.remove();
+      showToast(`✅ ${moves.length}人の選手を移動しました`);
+    };
+
+    dlg.querySelector('.btn-cancel').onclick = () => {
+      dlg.remove();
+    };
+  }
+
+  function applyMoveCommands(moves) {
+    const { fw, fl } = fieldDims();
+    pushHistory();
+
+    moves.forEach(move => {
+      const player = state.players.find(
+        p => p.team === move.team && p.number === move.number
+      );
+      if (player) {
+        player.x = Math.max(0, Math.min(fw, move.x));
+        player.y = Math.max(0, Math.min(fl, move.y));
+      }
+    });
+
+    render();
+    saveToStorage();
+  }
+
 })();
+

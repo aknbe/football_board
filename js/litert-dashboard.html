@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LiteRT-LM 状態管理ダッシュボード</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #0f0f0f;
+      color: #fff;
+      padding: 20px;
+    }
+
+    .dashboard {
+      max-width: 900px;
+      margin: 0 auto;
+      background: #1a1a1a;
+      border: 1px solid #333;
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid #333;
+    }
+
+    .header h1 {
+      font-size: 20px;
+      font-weight: 600;
+    }
+
+    .status-indicator {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+    }
+
+    .status-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      animation: none;
+      transition: background-color 0.3s, box-shadow 0.3s;
+    }
+
+    .status-dot.ready {
+      background: #4caf50;
+      box-shadow: 0 0 8px #4caf50;
+    }
+
+    .status-dot.initializing,
+    .status-dot.loading,
+    .status-dot.generating {
+      background: #ff9800;
+      box-shadow: 0 0 8px #ff9800;
+      animation: pulse 1.2s ease-in-out infinite;
+    }
+
+    .status-dot.error {
+      background: #f44336;
+      box-shadow: 0 0 8px #f44336;
+    }
+
+    .status-dot.cancelled {
+      background: #2196f3;
+      box-shadow: 0 0 8px #2196f3;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .status-text {
+      font-weight: 500;
+      text-transform: uppercase;
+      font-size: 12px;
+      letter-spacing: 0.5px;
+    }
+
+    .status-text.ready { color: #4caf50; }
+    .status-text.initializing,
+    .status-text.loading,
+    .status-text.generating { color: #ff9800; }
+    .status-text.error { color: #f44336; }
+    .status-text.cancelled { color: #2196f3; }
+
+    .controls {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 10px;
+      margin-bottom: 24px;
+    }
+
+    .btn {
+      padding: 10px 16px;
+      border: 1px solid #333;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.08);
+      color: #fff;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+
+    .btn:hover:not(:disabled) {
+      background: rgba(255, 255, 255, 0.15);
+      border-color: #555;
+    }
+
+    .btn.primary {
+      background: rgba(76, 175, 80, 0.2);
+      border-color: #4caf50;
+      color: #66bb6a;
+    }
+
+    .btn.primary:hover:not(:disabled) {
+      background: rgba(76, 175, 80, 0.35);
+    }
+
+    .btn.danger {
+      background: rgba(244, 67, 54, 0.15);
+      border-color: #f44336;
+      color: #ef9a9a;
+    }
+
+    .btn.danger:hover:not(:disabled) {
+      background: rgba(244, 67, 54, 0.25);
+    }
+
+    .btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+
+    .message-display {
+      margin-bottom: 24px;
+      padding: 16px;
+      background: #0f0f0f;
+      border: 1px solid #333;
+      border-radius: 8px;
+      font-size: 13px;
+      line-height: 1.6;
+      color: #ccc;
+      min-height: 100px;
+      max-height: 300px;
+      overflow-y: auto;
+      font-family: 'Monaco', 'Courier New', monospace;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .message-display.empty {
+      color: #666;
+      font-style: italic;
+    }
+
+    .state-log {
+      background: #0f0f0f;
+      border: 1px solid #333;
+      border-radius: 8px;
+      padding: 16px;
+      max-height: 250px;
+      overflow-y: auto;
+    }
+
+    .log-entry {
+      font-size: 11px;
+      line-height: 1.6;
+      margin-bottom: 8px;
+      padding: 8px;
+      background: rgba(255, 255, 255, 0.03);
+      border-left: 3px solid #666;
+      border-radius: 4px;
+      font-family: 'Monaco', monospace;
+    }
+
+    .log-entry.initializing,
+    .log-entry.loading {
+      border-left-color: #ff9800;
+      color: #ffb74d;
+    }
+
+    .log-entry.ready {
+      border-left-color: #4caf50;
+      color: #81c784;
+    }
+
+    .log-entry.generating {
+      border-left-color: #ff9800;
+      color: #ffb74d;
+    }
+
+    .log-entry.error {
+      border-left-color: #f44336;
+      color: #ef9a9a;
+    }
+
+    .log-entry.cancelled {
+      border-left-color: #2196f3;
+      color: #64b5f6;
+    }
+
+    .log-entry.timeout {
+      border-left-color: #ff5722;
+      color: #ff8a65;
+    }
+
+    .log-timestamp {
+      color: #666;
+      margin-right: 8px;
+    }
+
+    .log-state {
+      color: #aaa;
+      font-weight: 600;
+      text-transform: uppercase;
+      font-size: 10px;
+      margin-right: 8px;
+    }
+
+    .section-title {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      color: #888;
+      margin-bottom: 12px;
+      letter-spacing: 0.5px;
+    }
+
+    .settings {
+      background: #0f0f0f;
+      border: 1px solid #333;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 24px;
+    }
+
+    .setting-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .setting-row label {
+      flex: 1;
+      font-size: 12px;
+      color: #aaa;
+    }
+
+    .setting-row input {
+      width: 100px;
+      padding: 6px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid #333;
+      border-radius: 6px;
+      color: #fff;
+      font-size: 12px;
+    }
+
+    .help-text {
+      font-size: 11px;
+      color: #666;
+      margin-top: 4px;
+      margin-left: 0;
+    }
+  </style>
+</head>
+<body>
+
+<div class="dashboard">
+  <!-- ヘッダー -->
+  <div class="header">
+    <h1>🤖 LiteRT-LM 状態管理</h1>
+    <div class="status-indicator">
+      <div class="status-dot ready" id="statusDot"></div>
+      <span class="status-text ready" id="statusText">READY</span>
+    </div>
+  </div>
+
+  <!-- コントロール -->
+  <div class="controls">
+    <button class="btn primary" id="btnInit" onclick="initEngine()">① 初期化</button>
+    <button class="btn" id="btnTest" onclick="sendTestMessage()" disabled>② テスト送信</button>
+    <button class="btn danger" id="btnCancel" onclick="cancelGeneration()" disabled>③ 停止</button>
+    <button class="btn danger" id="btnReset" onclick="resetEngine()">④ リセット</button>
+  </div>
+
+  <!-- 設定 -->
+  <div class="settings">
+    <div class="section-title">⚙️ 設定</div>
+    <div class="setting-row">
+      <label>生成タイムアウト（秒）</label>
+      <input type="number" id="timeoutInput" min="10" max="300" value="60" onchange="updateTimeout()">
+    </div>
+    <div class="help-text">※ 値が小さいほど応答がないときにすぐ停止します</div>
+  </div>
+
+  <!-- メッセージ表示 -->
+  <div class="section-title">💬 AI 応答</div>
+  <div class="message-display empty" id="messageDisplay">応答がここに表示されます...</div>
+
+  <!-- 状態ログ -->
+  <div class="section-title" style="margin-top: 24px;">📋 実行ログ</div>
+  <div class="state-log" id="stateLog">
+    <div class="log-entry">ログがここに表示されます...</div>
+  </div>
+</div>
+
+<script src="litert-chat.js"></script>
+<script>
+  // ── UI コントローラー ──────────────────────────────────────────────────────
+
+  const UI = {
+    statusDot: document.getElementById('statusDot'),
+    statusText: document.getElementById('statusText'),
+    messageDisplay: document.getElementById('messageDisplay'),
+    stateLog: document.getElementById('stateLog'),
+    btnInit: document.getElementById('btnInit'),
+    btnTest: document.getElementById('btnTest'),
+    btnCancel: document.getElementById('btnCancel'),
+    btnReset: document.getElementById('btnReset'),
+    timeoutInput: document.getElementById('timeoutInput'),
+  };
+
+  let currentMessage = '';
+
+  /**
+   * 状態表示を更新
+   */
+  function updateStateUI(state, message) {
+    // ステータスドット・テキスト
+    UI.statusDot.className = `status-dot ${state}`;
+    UI.statusText.className = `status-text ${state}`;
+    UI.statusText.textContent = state.toUpperCase();
+
+    // ボタン有効化・無効化
+    const { isReady, isGenerating, isInitializing } = window.litertChat.getStatus();
+    UI.btnInit.disabled = isReady || isInitializing;
+    UI.btnTest.disabled = !isReady || isGenerating;
+    UI.btnCancel.disabled = !isGenerating;
+    UI.btnReset.disabled = isInitializing;
+
+    // ログエントリを追加
+    const entry = document.createElement('div');
+    entry.className = `log-entry ${state}`;
+    const now = new Date().toLocaleTimeString('ja-JP');
+    entry.innerHTML = `<span class="log-timestamp">${now}</span><span class="log-state">${state}</span>${message}`;
+    UI.stateLog.appendChild(entry);
+    UI.stateLog.scrollTop = UI.stateLog.scrollHeight;
+
+    // 最大行数制限
+    while (UI.stateLog.children.length > 20) {
+      UI.stateLog.removeChild(UI.stateLog.firstChild);
+    }
+  }
+
+  /**
+   * 初期化
+   */
+  async function initEngine() {
+    UI.messageDisplay.textContent = '';
+    UI.messageDisplay.classList.add('empty');
+    currentMessage = '';
+    await window.litertChat.initialize();
+  }
+
+  /**
+   * テストメッセージを送信
+   */
+  async function sendTestMessage() {
+    const testPrompt = `フィールド 50m×68m
+【チームA(赤)】 3-3-1: GK1: (25,62) | DF2: (10,48) DF3: (25,48) DF4: (40,48) | MF5: (10,34) MF6: (25,34) MF7: (40,34) | FW8: (25,6)
+【チームB(青)】 3-3-1: GK1: (25,6) | DF2: (10,20) DF3: (25,20) DF4: (40,20) | MF5: (10,34) MF6: (25,34) MF7: (40,34) | FW8: (25,62)
+ボール: (25,34)
+
+この配置について簡潔に分析してください（50文字程度）。`;
+
+    UI.messageDisplay.textContent = '⏳ 送信中...';
+    UI.messageDisplay.classList.remove('empty');
+    currentMessage = '';
+
+    window.litertChat.onStreamChunk = (chunk) => {
+      currentMessage += chunk;
+      UI.messageDisplay.textContent = currentMessage;
+      UI.messageDisplay.scrollTop = UI.messageDisplay.scrollHeight;
+    };
+
+    const response = await window.litertChat.sendMessage(testPrompt);
+    if (!response) {
+      UI.messageDisplay.textContent = '⚠️ 応答がありません（タイムアウトまたはエラー）';
+      UI.messageDisplay.classList.remove('empty');
+    }
+  }
+
+  /**
+   * 生成をキャンセル
+   */
+  function cancelGeneration() {
+    window.litertChat.cancel();
+  }
+
+  /**
+   * リセット
+   */
+  async function resetEngine() {
+    await window.litertChat.reset();
+  }
+
+  /**
+   * タイムアウト時間を更新
+   */
+  function updateTimeout() {
+    const seconds = parseInt(UI.timeoutInput.value, 10);
+    if (seconds > 0) {
+      window.litertChat.setGenerationTimeout(seconds * 1000);
+    }
+  }
+
+  /**
+   * 初期化：状態変化リスナーを登録
+   */
+  window.litertChat.onStateChange = (data) => {
+    updateStateUI(data.state, data.message);
+  };
+
+  console.log('✅ UI コントローラー初期化完了');
+  console.log('ボタンをクリックして開始してください：');
+  console.log('  1. ① 初期化 → モデルをロード');
+  console.log('  2. ② テスト送信 → AI が応答');
+  console.log('  3. ③ 停止 → 生成をキャンセル（タイムアウト対策）');
+  console.log('  4. ④ リセット → エンジンを削除して再スタート可能に');
+</script>
+
+</body>
+</html>
