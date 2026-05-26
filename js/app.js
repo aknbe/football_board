@@ -1205,14 +1205,17 @@ B2: (12, 20)
       messagesDiv.scrollTop = messagesDiv.scrollHeight;
     };
 
-    // AI応答取得
-    const response = await window.litertChat.sendMessage(
-      window.litertChat.buildTacticalPrompt(state, fieldDims())
-    );
-
-    input.disabled = false;
-    document.getElementById('chat-send-btn').disabled = false;
-    window.litertChat.onStreamChunk = null; // コールバックを解除
+    // AI応答取得 — try/finally でタイムアウト・エラー時も必ず入力欄を解放する
+    let response = null;
+    try {
+      response = await window.litertChat.sendMessage(
+        window.litertChat.buildTacticalPrompt(state, fieldDims())
+      );
+    } finally {
+      input.disabled = false;
+      document.getElementById('chat-send-btn').disabled = false;
+      window.litertChat.onStreamChunk = null;
+    }
 
     if (response) {
       // 移動コマンド自動抽出

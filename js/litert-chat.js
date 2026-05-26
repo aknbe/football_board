@@ -162,6 +162,12 @@ class LiteRTChatManager {
     this._generationAbortController = new AbortController();
     let fullResponse = '';
 
+    // abort 時に即座に reject される Promise を用意（ストリームのブロック解除用）
+    this._abortReject = null;
+    const abortPromise = new Promise((_, reject) => {
+      this._abortReject = reject;
+    });
+
     this._notifyStateChange('generating', `AI が考え中... (タイムアウト: ${this._GENERATION_TIMEOUT / 1000}秒)`);
 
     // タイムアウト設定
@@ -173,14 +179,21 @@ class LiteRTChatManager {
     try {
       // ストリーミングで応答を取得
       const stream = this.conversation.sendMessageStreaming(userMessage);
+      const iterator = stream[Symbol.asyncIterator]();
 
-      for await (const chunk of stream) {
-        // キャンセルが呼ばれた場合は中断
-        if (!this._generationAbortController || this._generationAbortController.signal.aborted) {
+      // チャンクをひとつずつ取得。abort 時は abortPromise が reject して即座に catch へ抜ける
+      while (true) {
+        let result;
+        try {
+          result = await Promise.race([iterator.next(), abortPromise]);
+        } catch (e) {
+          // abort による中断
           this._notifyStateChange('cancelled', 'ユーザーが生成をキャンセルしました');
           break;
         }
+        if (result.done) break;
 
+        const chunk = result.value;
         let textChunk = '';
         if (typeof chunk === 'string') {
           textChunk = chunk;
@@ -204,8 +217,6 @@ class LiteRTChatManager {
 
         if (textChunk) {
           fullResponse += textChunk;
-          
-          // リアルタイム更新
           if (this.onStreamChunk) {
             this.onStreamChunk(textChunk);
           }
@@ -240,7 +251,13 @@ class LiteRTChatManager {
     }
 
     this._notifyStateChange('cancelling', '生成を停止中...');
-    
+
+    // abortPromise を reject してブロック中の iterator.next() を即座に解放
+    if (this._abortReject) {
+      this._abortReject(new DOMException('Generation cancelled', 'AbortError'));
+      this._abortReject = null;
+    }
+
     if (this._generationAbortController) {
       this._generationAbortController.abort();
       this._generationAbortController = null;
