@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="theme-color" content="#111111">
   <title>作戦ボード</title>
@@ -286,6 +286,10 @@ npm start</pre>
     <h3>⚙️ LiteRT チャット</h3>
     <span id="chat-status" class="chat-status-badge">初期化中...</span>
     <button id="chat-close-btn" class="chat-close-btn">✕</button>
+  </div>
+  <!-- 初期化/ファイルDL中用のプログレスバー -->
+  <div id="chat-progress" class="chat-progress">
+    <div id="chat-progress-fill" class="chat-progress-fill"></div>
   </div>
   <div id="chat-messages" class="chat-messages"></div>
   <div class="chat-input-wrapper">
