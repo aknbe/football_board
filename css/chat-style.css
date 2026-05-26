@@ -233,6 +233,27 @@
   flex-shrink: 0;
 }
 
+/* プログレスバー */
+.chat-progress {
+  width: 100%;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.05);
+  overflow: hidden;
+  flex-shrink: 0;
+  display: none; /* 初期状態は非表示 */
+}
+
+.chat-progress.active {
+  display: block;
+}
+
+.chat-progress-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #2196f3, #4caf50);
+  transition: width 0.4s ease-out;
+}
+
 /* 自動適用ダイアログ */
 .auto-apply-dialog {
   position: fixed;
