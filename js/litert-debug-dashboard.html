@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LiteRT-LM デバッグダッシュボード</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', monospace;
+      background: #0a0e27;
+      color: #e0e0e0;
+      padding: 20px;
+      overflow: hidden;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      height: 100vh;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      overflow: hidden;
+    }
+
+    .panel {
+      background: #1a1f3a;
+      border: 1px solid #2a3550;
+      border-radius: 8px;
+      padding: 20px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .panel::-webkit-scrollbar {
+      width: 6px;
+    }
+    .panel::-webkit-scrollbar-thumb {
+      background: #3a4560;
+      border-radius: 3px;
+    }
+
+    .title {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 14px;
+      color: #64b5f6;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 10px 0;
+      border-bottom: 1px solid #2a3550;
+      font-size: 12px;
+    }
+
+    .info-row:last-child {
+      border-bottom: none;
+    }
+
+    .label {
+      color: #90caf9;
+      font-weight: 500;
+    }
+
+    .value {
+      color: #fff;
+      font-weight: 600;
+    }
+
+    .value.ok { color: #81c784; }
+    .value.warn { color: #ffb74d; }
+    .value.error { color: #ef5350; }
+
+    .btn-group {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin: 14px 0;
+    }
+
+    .btn {
+      padding: 10px 14px;
+      border: none;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn.primary {
+      background: #1976d2;
+      color: #fff;
+    }
+    .btn.primary:hover { background: #1565c0; }
+
+    .btn.danger {
+      background: #c62828;
+      color: #fff;
+    }
+    .btn.danger:hover { background: #b71c1c; }
+
+    .btn.secondary {
+      background: #2a3550;
+      color: #90caf9;
+      border: 1px solid #3a4560;
+    }
+    .btn.secondary:hover { background: #3a4560; }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .timeline {
+      font-size: 11px;
+      line-height: 1.8;
+      flex: 1;
+      overflow-y: auto;
+    }
+
+    .timeline-entry {
+      padding: 8px;
+      margin: 4px 0;
+      border-left: 3px solid #2a3550;
+      background: rgba(255, 255, 255, 0.02);
+      border-radius: 4px;
+    }
+
+    .timeline-entry.initializing { border-left-color: #42a5f5; }
+    .timeline-entry.loading { border-left-color: #42a5f5; }
+    .timeline-entry.ready { border-left-color: #81c784; }
+    .timeline-entry.generating { border-left-color: #ffb74d; }
+    .timeline-entry.timeout { border-left-color: #ef5350; }
+    .timeline-entry.error { border-left-color: #ef5350; }
+    .timeline-entry.cancelled { border-left-color: #64b5f6; }
+
+    .time { color: #666; font-size: 10px; }
+    .state { 
+      font-weight: 600; 
+      text-transform: uppercase;
+      font-size: 10px;
+      margin-right: 6px;
+    }
+    .time { color: #666; }
+    .message { color: #ccc; }
+
+    .progress-bar {
+      width: 100%;
+      height: 6px;
+      background: #2a3550;
+      border-radius: 3px;
+      overflow: hidden;
+      margin: 8px 0;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #42a5f5, #81c784);
+      width: 0%;
+      transition: width 0.3s;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin: 14px 0;
+    }
+
+    .stat-box {
+      background: rgba(255, 255, 255, 0.05);
+      padding: 12px;
+      border-radius: 6px;
+      border: 1px solid #2a3550;
+    }
+
+    .stat-label {
+      font-size: 10px;
+      color: #90caf9;
+      font-weight: 500;
+      margin-bottom: 4px;
+    }
+
+    .stat-value {
+      font-size: 18px;
+      font-weight: 600;
+      color: #fff;
+    }
+
+    .status-dot {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      margin-right: 6px;
+    }
+
+    .status-dot.ready { background: #81c784; }
+    .status-dot.initializing { background: #42a5f5; animation: pulse 1s infinite; }
+    .status-dot.generating { background: #ffb74d; animation: pulse 1s infinite; }
+    .status-dot.error { background: #ef5350; }
+    .status-dot.timeout { background: #ff6f00; }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .memo {
+      font-size: 11px;
+      background: rgba(33, 150, 243, 0.1);
+      border-left: 3px solid #2196f3;
+      padding: 10px;
+      border-radius: 4px;
+      margin: 10px 0;
+      color: #90caf9;
+    }
+
+    .test-section {
+      margin: 14px 0;
+      padding: 12px;
+      background: rgba(255, 255, 255, 0.02);
+      border-radius: 6px;
+      border: 1px solid #2a3550;
+    }
+
+    .test-label {
+      font-size: 11px;
+      color: #90caf9;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    textarea {
+      width: 100%;
+      height: 80px;
+      background: #0a0e27;
+      border: 1px solid #2a3550;
+      border-radius: 4px;
+      color: #e0e0e0;
+      padding: 10px;
+      font-family: monospace;
+      font-size: 11px;
+      resize: none;
+      margin: 8px 0;
+    }
+
+    textarea:focus {
+      outline: none;
+      border-color: #42a5f5;
+    }
+
+    .tool-section {
+      margin-top: 14px;
+      padding-top: 14px;
+      border-top: 1px solid #2a3550;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <!-- Left Panel: Status & Controls -->
+  <div class="panel">
+    <div class="title">
+      <span class="status-dot ready" id="statusDot"></span>
+      🔍 デバッグステータス
+    </div>
+
+    <!-- Current Status -->
+    <div class="info-row">
+      <span class="label">初期化済み</span>
+      <span class="value" id="isReady">-</span>
+    </div>
+    <div class="info-row">
+      <span class="label">生成中</span>
+      <span class="value" id="isGenerating">-</span>
+    </div>
+    <div class="info-row">
+      <span class="label">生成タイムアウト</span>
+      <span class="value" id="genTimeout">-</span>
+    </div>
+
+    <!-- Device Info -->
+    <div class="title" style="margin-top: 20px;">📱 デバイス</div>
+    <div class="info-row">
+      <span class="label">CPU コア</span>
+      <span class="value" id="cpuCores">-</span>
+    </div>
+    <div class="info-row">
+      <span class="label">メモリ使用</span>
+      <span class="value" id="memUsage">-</span>
+    </div>
+    <div class="info-row">
+      <span class="label">ヒープサイズ</span>
+      <span class="value" id="heapSize">-</span>
+    </div>
+
+    <!-- Controls -->
+    <div class="title" style="margin-top: 20px;">⚙️ コントロール</div>
+    <div class="btn-group">
+      <button class="btn primary" id="btnInit" onclick="initEngine()">① 初期化</button>
+      <button class="btn secondary" id="btnTest" onclick="sendTestMessage()" disabled>② テスト</button>
+      <button class="btn danger" id="btnCancel" onclick="cancelGeneration()" disabled>③ 停止</button>
+      <button class="btn danger" id="btnReset" onclick="resetEngine()">④ リセット</button>
+    </div>
+
+    <!-- Timeout Settings -->
+    <div class="test-section">
+      <div class="test-label">⏱️ タイムアウト設定（秒）</div>
+      <div class="info-row" style="border: none; padding: 0;">
+        <input type="number" id="timeoutInput" min="10" max="600" value="60" 
+          style="flex: 1; padding: 8px; background: #0a0e27; border: 1px solid #2a3550; 
+          border-radius: 4px; color: #fff; font-size: 12px;">
+        <button class="btn secondary" onclick="updateTimeout()" 
+          style="margin-left: 8px; width: 60px; padding: 8px;">設定</button>
+      </div>
+    </div>
+
+    <!-- Diagnostic Tools -->
+    <div class="title" style="margin-top: 20px;">🔧 診断ツール</div>
+    <div class="btn-group">
+      <button class="btn secondary" onclick="showDeviceInfo()">デバイス情報</button>
+      <button class="btn secondary" onclick="showNetworkInfo()">ネットワーク</button>
+      <button class="btn secondary" onclick="showMemoryInfo()">メモリ状態</button>
+      <button class="btn secondary" onclick="clearTimeline()">ログ消去</button>
+    </div>
+
+    <div class="memo">
+      💡 <strong>デバッグのコツ:</strong><br>
+      1. ブラウザコンソール（F12）も開いて確認<br>
+      2. DevTools の Network タブで .litertlm ファイルをチェック<br>
+      3. 初回は 600MB ダウンロード（遅い）<br>
+      4. 2回目以降はキャッシュで高速化
+    </div>
+  </div>
+
+  <!-- Right Panel: Timeline & Logs -->
+  <div class="panel">
+    <div class="title">📋 実行タイムライン</div>
+    
+    <!-- Progress Bar -->
+    <div class="progress-bar">
+      <div class="progress-fill" id="progressFill"></div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-grid">
+      <div class="stat-box">
+        <div class="stat-label">ログエントリ</div>
+        <div class="stat-value" id="logCount">0</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-label">経過時間</div>
+        <div class="stat-value" id="elapsed">0s</div>
+      </div>
+    </div>
+
+    <!-- Timeline -->
+    <div class="timeline" id="timeline">
+      <div class="memo">⏳ ログはここに表示されます</div>
+    </div>
+  </div>
+</div>
+
+<script src="litert-chat.js"></script>
+<script>
+  // ========================================
+  // デバッグダッシュボード実装
+  // ========================================
+
+  const UI = {
+    statusDot: document.getElementById('statusDot'),
+    isReady: document.getElementById('isReady'),
+    isGenerating: document.getElementById('isGenerating'),
+    genTimeout: document.getElementById('genTimeout'),
+    cpuCores: document.getElementById('cpuCores'),
+    memUsage: document.getElementById('memUsage'),
+    heapSize: document.getElementById('heapSize'),
+    timeline: document.getElementById('timeline'),
+    logCount: document.getElementById('logCount'),
+    elapsed: document.getElementById('elapsed'),
+    progressFill: document.getElementById('progressFill'),
+    btnInit: document.getElementById('btnInit'),
+    btnTest: document.getElementById('btnTest'),
+    btnCancel: document.getElementById('btnCancel'),
+    btnReset: document.getElementById('btnReset'),
+    timeoutInput: document.getElementById('timeoutInput'),
+  };
+
+  let startTime = null;
+  let logEntries = 0;
+
+  // ────────────────────────────────────────────────────────
+  // UI 更新
+  // ────────────────────────────────────────────────────────
+
+  function updateStatus() {
+    const status = window.litertChat.getStatus();
+    const state = status.isReady ? 'ready' : status.isGenerating ? 'generating' : 'initializing';
+
+    UI.statusDot.className = `status-dot ${state}`;
+    UI.isReady.textContent = status.isReady ? '✅ はい' : '❌ いいえ';
+    UI.isReady.className = `value ${status.isReady ? 'ok' : 'error'}`;
+    
+    UI.isGenerating.textContent = status.isGenerating ? '⏳ 中' : '✅ いいえ';
+    UI.isGenerating.className = `value ${status.isGenerating ? 'warn' : 'ok'}`;
+    
+    UI.genTimeout.textContent = (status.generationTimeout / 1000) + '秒';
+    
+    // ボタン制御
+    UI.btnInit.disabled = status.isReady || status.isInitializing;
+    UI.btnTest.disabled = !status.isReady || status.isGenerating;
+    UI.btnCancel.disabled = !status.isGenerating;
+    UI.btnReset.disabled = status.isInitializing;
+  }
+
+  function updateDeviceInfo() {
+    UI.cpuCores.textContent = navigator.hardwareConcurrency || '?';
+    
+    if (performance.memory) {
+      UI.memUsage.textContent = 
+        Math.round(performance.memory.usedJSHeapSize / 1e6) + ' MB';
+      UI.heapSize.textContent = 
+        (performance.memory.jsHeapSizeLimit / 1e9).toFixed(1) + ' GB';
+    } else {
+      UI.memUsage.textContent = 'API 非対応';
+      UI.heapSize.textContent = 'API 非対応';
+    }
+  }
+
+  function addLogEntry(state, message) {
+    const entry = document.createElement('div');
+    entry.className = `timeline-entry ${state}`;
+    
+    const now = new Date();
+    const time = now.toLocaleTimeString('ja-JP');
+    
+    entry.innerHTML = `
+      <span class="time">${time}</span>
+      <span class="state">${state}</span>
+      <span class="message">${message}</span>
+    `;
+    
+    UI.timeline.appendChild(entry);
+    UI.timeline.scrollTop = UI.timeline.scrollHeight;
+    
+    logEntries++;
+    UI.logCount.textContent = logEntries;
+  }
+
+  function updateElapsed() {
+    if (!startTime) return;
+    const elapsed = Math.round((Date.now() - startTime) / 1000);
+    UI.elapsed.textContent = elapsed + 's';
+    
+    // プログレスバー更新（最大 120秒）
+    const progress = Math.min(100, (elapsed / 120) * 100);
+    UI.progressFill.style.width = progress + '%';
+  }
+
+  setInterval(updateDeviceInfo, 1000);
+  setInterval(updateElapsed, 500);
+  setInterval(updateStatus, 500);
+
+  // ────────────────────────────────────────────────────────
+  // イベントハンドラ
+  // ────────────────────────────────────────────────────────
+
+  window.litertChat.onStateChange = ({ state, message, timestamp }) => {
+    addLogEntry(state, message);
+    updateStatus();
+    
+    if (!startTime && state === 'initializing') {
+      startTime = Date.now();
+    }
+  };
+
+  async function initEngine() {
+    if (logEntries === 0) {
+      addLogEntry('info', '初期化を開始します...');
+    }
+    UI.timeline.innerHTML = '';
+    logEntries = 0;
+    startTime = null;
+    
+    await window.litertChat.initialize();
+  }
+
+  async function sendTestMessage() {
+    startTime = Date.now();
+    addLogEntry('info', 'テストメッセージを送信');
+    
+    window.litertChat.onStreamChunk = (chunk) => {
+      // ストリーミング更新（表示なし）
+    };
+
+    const response = await window.litertChat.sendMessage('こんにちは。簡潔に返答してください。');
+    
+    if (response) {
+      addLogEntry('ready', `✅ 応答取得: ${response.substring(0, 50)}...`);
+    } else {
+      addLogEntry('error', '❌ 応答取得失敗');
+    }
+  }
+
+  function cancelGeneration() {
+    addLogEntry('info', 'キャンセルを実行');
+    window.litertChat.cancel();
+  }
+
+  async function resetEngine() {
+    addLogEntry('info', 'リセットを実行');
+    await window.litertChat.reset();
+  }
+
+  function updateTimeout() {
+    const seconds = parseInt(UI.timeoutInput.value, 10);
+    if (seconds > 0) {
+      window.litertChat.setGenerationTimeout(seconds * 1000);
+      addLogEntry('info', `⏱️ タイムアウト: ${seconds}秒に設定`);
+    }
+  }
+
+  function clearTimeline() {
+    UI.timeline.innerHTML = '<div class="memo">⏳ ログをクリアしました</div>';
+    logEntries = 0;
+    UI.logCount.textContent = '0';
+    UI.elapsed.textContent = '0s';
+    UI.progressFill.style.width = '0%';
+  }
+
+  function showDeviceInfo() {
+    const info = `CPU: ${navigator.hardwareConcurrency} コア
+ブラウザ: ${navigator.userAgent.split(' ').slice(-2).join(' ')}
+メモリ: ${navigator.deviceMemory || '?'} GB`;
+    addLogEntry('info', info);
+  }
+
+  function showNetworkInfo() {
+    const conn = navigator.connection || navigator.mozConnection;
+    const info = conn 
+      ? `接続: ${conn.effectiveType}, 下り: ${conn.downlink} Mbps`
+      : 'Connection API 非対応';
+    addLogEntry('info', info);
+  }
+
+  function showMemoryInfo() {
+    if (performance.memory) {
+      const used = Math.round(performance.memory.usedJSHeapSize / 1e6);
+      const limit = (performance.memory.jsHeapSizeLimit / 1e9).toFixed(1);
+      addLogEntry('info', `メモリ: ${used} MB / ${limit} GB`);
+    } else {
+      addLogEntry('warn', 'Memory API 非対応');
+    }
+  }
+
+  // 初期化
+  updateDeviceInfo();
+  updateStatus();
+  addLogEntry('info', '💻 デバッグダッシュボード起動');
+</script>
+
+</body>
+</html>

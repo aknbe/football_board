@@ -846,11 +846,18 @@ B2: (12, 20)
       }
     }
 
+    let retryCount = 0;
+    const MAX_RETRIES = 3;
+
     function connect() {
+      if (retryCount >= MAX_RETRIES) {
+        console.warn(`[MCP] 接続再試行の上限（${MAX_RETRIES}回）に達したため、再接続を停止します。`);
+        return;
+      }
       try { ws = new WebSocket('ws://localhost:3001'); }
       catch (_) { scheduleReconnect(); return; }
 
-      ws.onopen  = () => { setStatus(true);  console.log('[MCP] 接続'); };
+      ws.onopen  = () => { retryCount = 0; setStatus(true);  console.log('[MCP] 接続'); };
       ws.onclose = () => { setStatus(false); scheduleReconnect(); };
       ws.onerror = () => {};
       ws.onmessage = ev => {
@@ -859,8 +866,13 @@ B2: (12, 20)
     }
 
     function scheduleReconnect() {
-      clearTimeout(reconnTimer);
-      reconnTimer = setTimeout(connect, 4000);
+      retryCount++;
+      if (retryCount < MAX_RETRIES) {
+        clearTimeout(reconnTimer);
+        reconnTimer = setTimeout(connect, 4000);
+      } else {
+        console.warn(`[MCP] 接続に失敗しました。再接続を停止します。`);
+      }
     }
 
     connect();
@@ -1133,6 +1145,34 @@ B2: (12, 20)
   }
 
   async function initLiteRTChat() {
+    const progressBar = document.getElementById('chat-progress');
+    const progressFill = document.getElementById('chat-progress-fill');
+
+    // 状態が変化したときにヘッダーのバッジとログを更新する
+    window.litertChat.onStateChange = ({ state, message }) => {
+      const badge = document.getElementById('chat-status');
+      if (badge) {
+        badge.textContent = message;
+        badge.className = `chat-status-badge ${state}`;
+      }
+
+      // プログレスバーの進捗表示制御
+      if (state === 'initializing' || state === 'loading') {
+        progressBar.classList.add('active');
+        let width = '10%';
+        if (message.includes('プロンプト')) width = '25%';
+        else if (message.includes('ライブラリ')) width = '45%';
+        else if (message.includes('モデル読み込み中')) width = '70%';
+        else if (message.includes('会話セッション')) width = '90%';
+        progressFill.style.width = width;
+      } else if (state === 'ready' || state === 'error') {
+        progressFill.style.width = state === 'ready' ? '100%' : '0%';
+        setTimeout(() => {
+          progressBar.classList.remove('active');
+        }, 800);
+      }
+    };
+
     const success = await window.litertChat.initialize();
     if (success) {
       document.getElementById('chat-input').disabled = false;
@@ -1155,6 +1195,16 @@ B2: (12, 20)
     input.disabled = true;
     document.getElementById('chat-send-btn').disabled = true;
 
+    // ストリーミング返答用にプレースホルダーメッセージを追加
+    const assistantMsgDiv = addChatMessage('', 'assistant');
+
+    // ストリームのチャンク受信時にチャット領域をリアルタイム更新するコールバックを設定
+    window.litertChat.onStreamChunk = (chunk) => {
+      assistantMsgDiv.textContent += chunk;
+      const messagesDiv = document.getElementById('chat-messages');
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    };
+
     // AI応答取得
     const response = await window.litertChat.sendMessage(
       window.litertChat.buildTacticalPrompt(state, fieldDims())
@@ -1162,17 +1212,17 @@ B2: (12, 20)
 
     input.disabled = false;
     document.getElementById('chat-send-btn').disabled = false;
+    window.litertChat.onStreamChunk = null; // コールバックを解除
 
     if (response) {
-      addChatMessage(response, 'assistant');
-
       // 移動コマンド自動抽出
       const moves = window.litertChat.extractMoveCommands(response);
       if (moves.length > 0) {
         showAutoApplyPrompt(moves, response);
       }
     } else {
-      addChatMessage('⚠️ 応答生成に失敗しました', 'system');
+      assistantMsgDiv.textContent = '⚠️ 応答生成に失敗しました';
+      assistantMsgDiv.className = 'chat-message system';
     }
   }
 
@@ -1186,6 +1236,7 @@ B2: (12, 20)
 
     // 自動スクロール
     messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    return msgDiv;
   }
 
   function showAutoApplyPrompt(moves, fullResponse) {

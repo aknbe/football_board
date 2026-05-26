@@ -172,26 +172,42 @@ class LiteRTChatManager {
 
     try {
       // ストリーミングで応答を取得
-      const stream = this.conversation.sendMessageStreaming({
-        role: 'user',
-        content: userMessage,
-      });
+      const stream = this.conversation.sendMessageStreaming(userMessage);
 
       for await (const chunk of stream) {
         // キャンセルが呼ばれた場合は中断
-        if (this._generationAbortController.signal.aborted) {
+        if (!this._generationAbortController || this._generationAbortController.signal.aborted) {
           this._notifyStateChange('cancelled', 'ユーザーが生成をキャンセルしました');
           break;
         }
 
-        for (const item of chunk.content) {
-          if (item.type === 'text') {
-            fullResponse += item.text;
-            
-            // リアルタイム更新
-            if (this.onStreamChunk) {
-              this.onStreamChunk(item.text);
+        let textChunk = '';
+        if (typeof chunk === 'string') {
+          textChunk = chunk;
+        } else if (chunk && typeof chunk === 'object') {
+          if (typeof chunk.text === 'string') {
+            textChunk = chunk.text;
+          } else if (typeof chunk.content === 'string') {
+            textChunk = chunk.content;
+          } else if (Array.isArray(chunk.content)) {
+            for (const item of chunk.content) {
+              if (item && item.type === 'text' && typeof item.text === 'string') {
+                textChunk += item.text;
+              } else if (typeof item === 'string') {
+                textChunk += item;
+              }
             }
+          } else if (chunk.content && typeof chunk.content === 'object' && typeof chunk.content.text === 'string') {
+            textChunk = chunk.content.text;
+          }
+        }
+
+        if (textChunk) {
+          fullResponse += textChunk;
+          
+          // リアルタイム更新
+          if (this.onStreamChunk) {
+            this.onStreamChunk(textChunk);
           }
         }
       }
@@ -342,6 +358,27 @@ class LiteRTChatManager {
     await this._cleanup();
     this.isReady = false;
     this._notifyStateChange('info', 'エンジン削除完了');
+  }
+  /**
+   * 戦術プロンプトを構築
+   */
+  buildTacticalPrompt(state, fieldDims) {
+    const { fw, fl } = fieldDims;
+
+    const formatTeam = (team) =>
+      state.players
+        .filter(p => p.team === team)
+        .map(p => `${p.role}${p.number}: (${Math.round(p.x)},${Math.round(p.y)})`)
+        .join(' | ');
+
+    return `フィールド ${fw}m×${fl}m
+【チームA(赤)】 ${state.formationA}: ${formatTeam('A')}
+【チームB(青)】 ${state.formationB}: ${formatTeam('B')}
+ボール: (${Math.round(state.ball.x)},${Math.round(state.ball.y)})
+
+現在の配置について:
+1. Aチーム、Bチームそれぞれの強み・弱点を指摘
+2. 各チームの改善案を「A3→20,30 B2→15,45」形式で提案`;
   }
 }
 
