@@ -919,6 +919,9 @@ B2: (12, 20)
     document.getElementById('chat-close-btn').onclick = () => {
       document.getElementById('litert-chat-panel').classList.remove('open');
     };
+    document.getElementById('chat-download-btn').onclick = async () => {
+      await initLiteRTChat();
+    };
     document.getElementById('chat-send-btn').onclick = sendChatMessage;
     document.getElementById('chat-input').addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) {
@@ -1097,7 +1100,7 @@ B2: (12, 20)
     applyTeamColors();
     render();
     initMCPBridge();
-    initLiteRTChat(); // LiteRT チャットバックグラウンド初期化
+    // LiteRT チャット初期化はボタンクリック時に遅延実行される
   }
 
   function syncFieldSizeBtns() {
@@ -1136,17 +1139,37 @@ B2: (12, 20)
 
   // ──── LiteRT チャット関数 ────────────────────────────────────────────
 
-  function toggleLiteRTChat() {
+  async function toggleLiteRTChat() {
     const panel = document.getElementById('litert-chat-panel');
+    const initScreen = document.getElementById('chat-init-screen');
+    const messagesDiv = document.getElementById('chat-messages');
+    
     panel.classList.toggle('open');
     if (panel.classList.contains('open')) {
-      document.getElementById('chat-input').focus();
+      // パネルを開く時、初期化状態に応じて画面を切り替え
+      if (!window.litertChat.isReady && !window.litertChat.isInitializing) {
+        // 未初期化: ダウンロード画面を表示
+        initScreen.classList.remove('hidden');
+        messagesDiv.style.display = 'none';
+      } else if (window.litertChat.isReady) {
+        // 初期化済み: チャット画面を表示
+        initScreen.classList.add('hidden');
+        messagesDiv.style.display = 'flex';
+        document.getElementById('chat-input').focus();
+      }
+      // 初期化中の場合は何もしない（プログレスバーが表示されている状態）
     }
   }
 
   async function initLiteRTChat() {
     const progressBar = document.getElementById('chat-progress');
     const progressFill = document.getElementById('chat-progress-fill');
+    const initScreen = document.getElementById('chat-init-screen');
+    const messagesDiv = document.getElementById('chat-messages');
+
+    // 初期化画面を非表示、チャット画面を表示開始
+    initScreen.classList.add('hidden');
+    messagesDiv.style.display = 'flex';
 
     // 状態が変化したときにヘッダーのバッジとログを更新する
     window.litertChat.onStateChange = ({ state, message }) => {

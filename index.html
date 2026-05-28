@@ -139,6 +139,7 @@
 
   <div class="menu-sec">
     <div class="menu-sec-ttl">操作</div>
+    <button class="menu-btn"        id="btn-model-mgr">🧠 AI モデル管理</button>
     <button class="menu-btn"        id="btn-reset-ball">ボールをセンターに戻す</button>
     <button class="menu-btn danger" id="btn-clear-draw">描画をすべて消去</button>
     <button class="menu-btn danger" id="btn-clear-frames">フレームをすべて削除</button>
@@ -199,6 +200,77 @@ npm start</pre>
     </div>
   </details>
 
+</div>
+
+<!-- ── LiteRT Model Manager ──────────────────────────────────────────────── -->
+<div id="litert-model-mgr">
+  <div class="model-mgr-card">
+    <div class="model-mgr-hdr">
+      <h3>🧠 AI モデル管理</h3>
+      <button class="model-mgr-close" id="btn-model-mgr-close">✕</button>
+    </div>
+    <div class="model-mgr-body">
+      <p class="model-mgr-info">Gemma 4 E2B LiteRT-LM モデル</p>
+      
+      <!-- Status indicator -->
+      <div id="model-status" class="model-status-box">
+        <div class="status-indicator pending"></div>
+        <span id="model-status-text">確認中...</span>
+      </div>
+
+      <!-- Progress bar (hidden by default) -->
+      <div id="model-progress-wrap" class="model-progress-wrap hidden">
+        <div class="model-progress-bar">
+          <div id="model-progress-fill" class="progress-fill"></div>
+        </div>
+        <div id="model-progress-text" class="model-progress-text">0%</div>
+      </div>
+
+      <!-- Storage info -->
+      <div id="model-storage-info" class="model-storage-info">
+        <span id="model-size-label">サイズ: -</span>
+      </div>
+
+      <!-- Action buttons -->
+      <div class="model-mgr-actions">
+        <button id="btn-download-model" class="btn-action btn-download hidden">
+          📥 モデルをダウンロード
+        </button>
+        <button id="btn-delete-model" class="btn-action btn-delete hidden">
+          🗑️ キャッシュを削除
+        </button>
+        <button id="btn-cancel-download" class="btn-action btn-cancel hidden">
+          ⏹️ ダウンロード中止
+        </button>
+      </div>
+
+      <hr class="model-divider">
+
+      <!-- LiteRT Chat section -->
+      <div class="model-chat-sec">
+        <h4>AI 戦術アシスタント</h4>
+        
+        <!-- Initialize button -->
+        <button id="btn-init-litert" class="btn-action btn-init">
+          ▶️ AI を起動
+        </button>
+
+        <!-- Chat status -->
+        <div id="litert-status" class="litert-status-box">
+          <div class="status-indicator ready"></div>
+          <span id="litert-status-text">未初期化</span>
+        </div>
+
+        <!-- State log -->
+        <div id="litert-log" class="litert-log"></div>
+
+        <!-- Cancel button (during generation) -->
+        <button id="btn-cancel-generation" class="btn-action btn-cancel hidden">
+          ⏹️ 応答をキャンセル
+        </button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- ── AI consultation dialog ─────────────────────────────────────────────── -->
@@ -284,13 +356,25 @@ npm start</pre>
 <div id="litert-chat-panel" class="chat-panel">
   <div class="chat-header">
     <h3>⚙️ LiteRT チャット</h3>
-    <span id="chat-status" class="chat-status-badge">初期化中...</span>
+    <span id="chat-status" class="chat-status-badge">未初期化</span>
     <button id="chat-close-btn" class="chat-close-btn">✕</button>
   </div>
   <!-- 初期化/ファイルDL中用のプログレスバー -->
   <div id="chat-progress" class="chat-progress">
     <div id="chat-progress-fill" class="chat-progress-fill"></div>
   </div>
+  
+  <!-- モデル未初期化時の表示 -->
+  <div id="chat-init-screen" class="chat-init-screen">
+    <div class="chat-init-content">
+      <div class="chat-init-icon">🚀</div>
+      <h4>モデルをダウンロード</h4>
+      <p>LiteRT Gemma 4 モデルをダウンロードしてチャット機能を使用できます</p>
+      <p class="chat-init-size">ファイルサイズ: 約 4GB</p>
+      <button id="chat-download-btn" class="chat-download-btn">📥 ダウンロード開始</button>
+    </div>
+  </div>
+  
   <div id="chat-messages" class="chat-messages"></div>
   <div class="chat-input-wrapper">
     <input 
@@ -308,10 +392,12 @@ npm start</pre>
 </div>
 
 <script src="js/field.js"></script>
-<script type="module" src="js/litert-chat.js"></script>
 <script src="js/player.js"></script>
 <script src="js/drawing.js"></script>
 <script src="js/animation.js"></script>
 <script src="js/app.js"></script>
+<script src="js/litert-chat.js"></script>
+<script src="js/litert-model-manager.js"></script>
+<script src="js/litert-model-ui.js"></script>
 </body>
 </html>

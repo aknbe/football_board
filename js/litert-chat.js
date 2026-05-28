@@ -2,18 +2,21 @@
 
 let systemPrompt = '';
 async function loadSystemPrompt() {
-  const res = await fetch('../system_prompt.txt');
-  systemPrompt = await res.text();
+  try {
+    const res = await fetch('./system_prompt.txt');
+    systemPrompt = await res.text();
+  } catch (error) {
+    console.warn('[LiteRT] System prompt load failed:', error);
+    systemPrompt = 'You are a helpful football tactics assistant.';
+  }
 }
 
-// Gemma 4 E2B モデルでエンジンを作成
-// E2B: 効率重視 (推奨)
-// E4B: 精度重視 (より大きい)
+// Gemma 4 E2B モデル
 const MODEL_URL = 'https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/main/gemma-4-E2B-it-web.litertlm';
 
-// ── Service Worker 登録 ──────────────────────────────────────────────────────
+// Service Worker 登録
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('./service-worker.js').catch(err => 
+  navigator.serviceWorker.register('./js/service-worker.js').catch(err => 
     console.warn('[SW] 登録失敗:', err)
   );
 }
@@ -36,8 +39,8 @@ class LiteRTChatManager {
     // タイムアウト・キャンセル関連
     this._generationAbortController = null;
     this._timeoutHandle = null;
-    this._GENERATION_TIMEOUT = 60000;    // 生成タイムアウト: 60秒
-    this._INIT_TIMEOUT = 300000;         // 初期化タイムアウト: 120秒
+    this._GENERATION_TIMEOUT = 180000;    // 生成タイムアウト: 180秒
+    this._INIT_TIMEOUT = 300000;         // 初期化タイムアウト: 300秒
     
     // 状態ログ
     this._stateLog = [];
@@ -84,7 +87,7 @@ class LiteRTChatManager {
     try {
       // タイムアウト設定
       initTimeout = setTimeout(() => {
-        this._notifyStateChange('error', '初期化がタイムアウト（120秒以内に完了せず）');
+        this._notifyStateChange('error', '初期化がタイムアウト（300秒以内に完了せず）');
         this.isInitializing = false;
         this._cleanup();
       }, this._INIT_TIMEOUT);
@@ -162,7 +165,7 @@ class LiteRTChatManager {
     this._generationAbortController = new AbortController();
     let fullResponse = '';
 
-    // abort 時に即座に reject される Promise を用意（ストリームのブロック解除用）
+    // abort 時に即座に reject される Promise を用意
     this._abortReject = null;
     const abortPromise = new Promise((_, reject) => {
       this._abortReject = reject;
@@ -181,7 +184,7 @@ class LiteRTChatManager {
       const stream = this.conversation.sendMessageStreaming(userMessage);
       const iterator = stream[Symbol.asyncIterator]();
 
-      // チャンクをひとつずつ取得。abort 時は abortPromise が reject して即座に catch へ抜ける
+      // チャンクをひとつずつ取得
       while (true) {
         let result;
         try {
@@ -252,7 +255,7 @@ class LiteRTChatManager {
 
     this._notifyStateChange('cancelling', '生成を停止中...');
 
-    // abortPromise を reject してブロック中の iterator.next() を即座に解放
+    // abortPromise を reject
     if (this._abortReject) {
       this._abortReject(new DOMException('Generation cancelled', 'AbortError'));
       this._abortReject = null;
@@ -273,26 +276,24 @@ class LiteRTChatManager {
   }
 
   /**
-   * 完全リセット（エンジン削除 & 再初期化準備）
+   * 完全リセット
    */
   async reset() {
     this._notifyStateChange('resetting', 'システムをリセット中...');
     
-    // 進行中の生成があれば中止
     if (this.isGenerating) {
       this.cancel();
     }
 
     await this._cleanup();
     
-    // 再初期化可能な状態に
     this.isReady = false;
     this.isInitializing = false;
     this._notifyStateChange('ready', '✅ リセット完了 - initialize() で再起動可能');
   }
 
   /**
-   * 内部クリーンアップ（プライベート）
+   * 内部クリーンアップ
    */
   async _cleanup() {
     try {
@@ -309,7 +310,6 @@ class LiteRTChatManager {
 
   /**
    * レスポンスから移動コマンドを抽出
-   * 対応形式: "A1→20,30" "B2→15,45" など
    */
   extractMoveCommands(text) {
     const pattern = /([AB])(\d+)→(\d+),(\d+)/g;
@@ -337,7 +337,7 @@ class LiteRTChatManager {
   }
 
   /**
-   * 状態ログを取得（デバッグ用）
+   * 状態ログを取得
    */
   getStateLog() {
     return [...this._stateLog];

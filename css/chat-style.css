@@ -366,3 +366,84 @@
     padding: 8px 10px;
   }
 }
+
+/* モデル未初期化時の初期化画面 */
+.chat-init-screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  padding: 20px;
+  opacity: 1;
+  transition: opacity 0.3s;
+}
+
+.chat-init-screen.hidden {
+  display: none;
+  opacity: 0;
+}
+
+.chat-init-content {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.chat-init-icon {
+  font-size: 48px;
+  margin-bottom: 8px;
+  animation: bounce 2s infinite;
+}
+
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+.chat-init-content h4 {
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.chat-init-content p {
+  color: #ccc;
+  font-size: 12px;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.chat-init-size {
+  color: #ffc107;
+  font-weight: 500;
+  font-size: 11px !important;
+  margin: 4px 0 8px 0 !important;
+}
+
+.chat-download-btn {
+  width: 220px;
+  height: 40px;
+  background: linear-gradient(135deg, #2196f3, #1976d2);
+  border: none;
+  color: #fff;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  margin-top: 8px;
+  transition: background 0.3s, transform 0.2s;
+  box-shadow: 0 4px 12px rgba(33, 150, 243, 0.3);
+}
+
+.chat-download-btn:hover {
+  background: linear-gradient(135deg, #1e88db, #1565c0);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(33, 150, 243, 0.4);
+}
+
+.chat-download-btn:active {
+  transform: translateY(0);
+}
