@@ -447,3 +447,60 @@
 .chat-download-btn:active {
   transform: translateY(0);
 }
+
+/* ダウンロード済み時の操作ボタン */
+.chat-action-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  opacity: 1;
+  transition: opacity 0.3s;
+}
+
+.chat-action-buttons.hidden {
+  display: none;
+  opacity: 0;
+}
+
+.chat-action-btn {
+  width: 100%;
+  height: 40px;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  transition: background 0.3s, transform 0.2s;
+}
+
+.chat-open-btn {
+  background: linear-gradient(135deg, #4caf50, #388e3c);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(76, 175, 80, 0.3);
+}
+
+.chat-open-btn:hover {
+  background: linear-gradient(135deg, #45a049, #2e7d32);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(76, 175, 80, 0.4);
+}
+
+.chat-open-btn:active {
+  transform: translateY(0);
+}
+
+.chat-delete-btn {
+  background: rgba(244, 67, 54, 0.15);
+  color: #ef9a9a;
+  border: 1px solid rgba(244, 67, 54, 0.3);
+}
+
+.chat-delete-btn:hover {
+  background: rgba(244, 67, 54, 0.25);
+  transform: translateY(-2px);
+}
+
+.chat-delete-btn:active {
+  transform: translateY(0);
+}

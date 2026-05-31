@@ -119,11 +119,11 @@
   <div class="menu-sec">
     <div class="menu-sec-ttl">チームカラー</div>
     <div class="color-pick-row">
-      <label>チーム A（下）</label>
+      <label for="color-a">チーム A（下）</label>
       <input type="color" id="color-a" value="#e53935">
     </div>
     <div class="color-pick-row">
-      <label>チーム B（上）</label>
+      <label for="color-b">チーム B（上）</label>
       <input type="color" id="color-b" value="#1e88e5">
     </div>
   </div>
@@ -131,7 +131,7 @@
   <div class="menu-sec">
     <div class="menu-sec-ttl">アニメーション速度</div>
     <div class="menu-row">
-      <label>移動時間</label>
+      <label for="speed-slider">移動時間</label>
       <input type="range" id="speed-slider" min="0.5" max="4" step="0.5" value="1.5">
       <span id="speed-label">1.5s</span>
     </div>
@@ -139,7 +139,6 @@
 
   <div class="menu-sec">
     <div class="menu-sec-ttl">操作</div>
-    <button class="menu-btn"        id="btn-model-mgr">🧠 AI モデル管理</button>
     <button class="menu-btn"        id="btn-reset-ball">ボールをセンターに戻す</button>
     <button class="menu-btn danger" id="btn-clear-draw">描画をすべて消去</button>
     <button class="menu-btn danger" id="btn-clear-frames">フレームをすべて削除</button>
@@ -200,77 +199,6 @@ npm start</pre>
     </div>
   </details>
 
-</div>
-
-<!-- ── LiteRT Model Manager ──────────────────────────────────────────────── -->
-<div id="litert-model-mgr">
-  <div class="model-mgr-card">
-    <div class="model-mgr-hdr">
-      <h3>🧠 AI モデル管理</h3>
-      <button class="model-mgr-close" id="btn-model-mgr-close">✕</button>
-    </div>
-    <div class="model-mgr-body">
-      <p class="model-mgr-info">Gemma 4 E2B LiteRT-LM モデル</p>
-      
-      <!-- Status indicator -->
-      <div id="model-status" class="model-status-box">
-        <div class="status-indicator pending"></div>
-        <span id="model-status-text">確認中...</span>
-      </div>
-
-      <!-- Progress bar (hidden by default) -->
-      <div id="model-progress-wrap" class="model-progress-wrap hidden">
-        <div class="model-progress-bar">
-          <div id="model-progress-fill" class="progress-fill"></div>
-        </div>
-        <div id="model-progress-text" class="model-progress-text">0%</div>
-      </div>
-
-      <!-- Storage info -->
-      <div id="model-storage-info" class="model-storage-info">
-        <span id="model-size-label">サイズ: -</span>
-      </div>
-
-      <!-- Action buttons -->
-      <div class="model-mgr-actions">
-        <button id="btn-download-model" class="btn-action btn-download hidden">
-          📥 モデルをダウンロード
-        </button>
-        <button id="btn-delete-model" class="btn-action btn-delete hidden">
-          🗑️ キャッシュを削除
-        </button>
-        <button id="btn-cancel-download" class="btn-action btn-cancel hidden">
-          ⏹️ ダウンロード中止
-        </button>
-      </div>
-
-      <hr class="model-divider">
-
-      <!-- LiteRT Chat section -->
-      <div class="model-chat-sec">
-        <h4>AI 戦術アシスタント</h4>
-        
-        <!-- Initialize button -->
-        <button id="btn-init-litert" class="btn-action btn-init">
-          ▶️ AI を起動
-        </button>
-
-        <!-- Chat status -->
-        <div id="litert-status" class="litert-status-box">
-          <div class="status-indicator ready"></div>
-          <span id="litert-status-text">未初期化</span>
-        </div>
-
-        <!-- State log -->
-        <div id="litert-log" class="litert-log"></div>
-
-        <!-- Cancel button (during generation) -->
-        <button id="btn-cancel-generation" class="btn-action btn-cancel hidden">
-          ⏹️ 応答をキャンセル
-        </button>
-      </div>
-    </div>
-  </div>
 </div>
 
 <!-- ── AI consultation dialog ─────────────────────────────────────────────── -->
@@ -338,11 +266,11 @@ npm start</pre>
   <div class="dlg-box">
     <div class="dlg-title">プレイヤー編集</div>
     <div class="dlg-field">
-      <label>番号</label>
+      <label for="edit-num">番号</label>
       <input type="number" id="edit-num" min="1" max="99" inputmode="numeric">
     </div>
     <div class="dlg-field">
-      <label>名前（省略可）</label>
+      <label for="edit-name">名前（省略可）</label>
       <input type="text" id="edit-name" placeholder="名前を入力" maxlength="12">
     </div>
     <div class="dlg-btns">
@@ -368,10 +296,18 @@ npm start</pre>
   <div id="chat-init-screen" class="chat-init-screen">
     <div class="chat-init-content">
       <div class="chat-init-icon">🚀</div>
-      <h4>モデルをダウンロード</h4>
-      <p>LiteRT Gemma 4 モデルをダウンロードしてチャット機能を使用できます</p>
-      <p class="chat-init-size">ファイルサイズ: 約 4GB</p>
+      <h4 id="chat-init-title">モデルをダウンロード</h4>
+      <p id="chat-init-desc">LiteRT Gemma 4 モデルをダウンロードしてチャット機能を使用できます</p>
+      <p class="chat-init-size" id="chat-init-size">ファイルサイズ: 約 4GB</p>
+      
+      <!-- ダウンロード前: ダウンロードボタン表示 -->
       <button id="chat-download-btn" class="chat-download-btn">📥 ダウンロード開始</button>
+      
+      <!-- ダウンロード済み: 削除とチャット開始ボタン表示 -->
+      <div id="chat-action-buttons" class="chat-action-buttons hidden">
+        <button id="chat-open-btn" class="chat-action-btn chat-open-btn">💬 チャット開始</button>
+        <button id="chat-delete-btn" class="chat-action-btn chat-delete-btn">🗑️ キャッシュ削除</button>
+      </div>
     </div>
   </div>
   

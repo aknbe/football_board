@@ -14,7 +14,7 @@ async function loadSystemPrompt() {
 // Gemma 4 E2B モデルでエンジンを作成
 // E2B: 効率重視 (推奨)
 // E4B: 精度重視 (より大きい)
-const MODEL_URL = 'https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/main/gemma-4-E2B-it-web.litertlm';
+// MODEL_URL は litert-model-manager.js で定義済み
  
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./js/service-worker.js').catch(err => 
@@ -37,16 +37,54 @@ class LiteRTChatManager {
   }
 
   /**
+   * 進捗を更新（プログレスバー + メッセージ）
+   */
+  updateProgress(percent, message) {
+    const progressBar = document.getElementById('chat-progress');
+    const progressFill = document.getElementById('chat-progress-fill');
+    
+    // プログレスバーを表示
+    if (progressBar && percent > 0 && percent < 100) {
+      progressBar.classList.add('active');
+    }
+    
+    // プログレスバーを更新
+    if (progressFill) {
+      progressFill.style.width = percent + '%';
+    }
+    
+    // 完了したらプログレスバーを隠す（500ms遅延）
+    if (percent === 100) {
+      setTimeout(() => {
+        if (progressBar) {
+          progressBar.classList.remove('active');
+        }
+        if (progressFill) {
+          progressFill.style.width = '0%';
+        }
+      }, 500);
+    }
+    
+    this.updateStatus(message, 'loading');
+    console.log(`[LiteRT] ${percent}% - ${message}`);
+  }
+
+  /**
    * エンジン初期化
    */
   async initialize() {
     try {
-      // CDNから LiteRT-LM をインポート
+      // ステップ 1: ライブラリ読み込み (0 → 15%)
+      this.updateProgress(0, 'LiteRT ライブラリを読み込み中...');
       const { Engine } = await import('https://cdn.jsdelivr.net/npm/@litert-lm/core/+esm');
+      this.updateProgress(15, 'LiteRT ライブラリ読み込み完了');
 
-      // ステータス更新
-      this.updateStatus('モデル読み込み中...', 'loading');
-
+      // ステップ 2: モデルダウンロード/キャッシュ確認 (15 → 40%)
+      this.updateProgress(25, 'モデルをダウンロード中...');
+      
+      // ステップ 3: エンジン初期化 (40 → 75%)
+      this.updateProgress(40, 'エンジンを初期化中...');
+      
       this.engine = await Engine.create({
         model: MODEL_URL,
         mainExecutorSettings: {
@@ -55,7 +93,9 @@ class LiteRTChatManager {
         streaming: true, 
       });
 
-      // 会話セッションを作成
+      this.updateProgress(75, 'エンジン初期化完了。会話セッション準備中...');
+
+      // ステップ 4: 会話セッション作成 (75 → 95%)
       this.conversation = await this.engine.createConversation({
         preface: {
           messages: [
@@ -67,13 +107,18 @@ class LiteRTChatManager {
         },
       });
 
+      this.updateProgress(95, 'ファイナライズ中...');
+
+      // ステップ 5: 完了 (95 → 100%)
       this.isReady = true;
+      this.updateProgress(100, '準備完了');
       this.updateStatus('準備完了', 'ready');
       console.log('[LiteRT] エンジン初期化完了');
 
       return true;
     } catch (error) {
       console.error('[LiteRT] 初期化失敗:', error);
+      this.updateProgress(0, 'エラー: ' + error.message);
       this.updateStatus('エラー', 'error');
       return false;
     }
