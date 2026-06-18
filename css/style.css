@@ -261,12 +261,12 @@ canvas#canvas{display:block;position:fixed;top:0;left:0;touch-action:none}
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
 /* ── AI Dialog ── */
-#ai-dlg{
+#ai-dlg, .ai-dlg {
   position:fixed;inset:0;background:rgba(0,0,0,0.7);
   display:none;align-items:center;justify-content:center;
   z-index:300;padding:12px;
 }
-#ai-dlg.open{display:flex}
+#ai-dlg.open, .ai-dlg.open {display:flex}
 .ai-box{
   background:#1a1a1a;border-radius:14px;width:100%;max-width:480px;
   max-height:90dvh;display:flex;flex-direction:column;

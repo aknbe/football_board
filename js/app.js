@@ -21,6 +21,10 @@
     colorA:      '#e53935',
     colorB:      '#1e88e5',
     locked:      false,
+    selectedPlayer: null,
+    ghostSuggestions: null,
+    showHeatmap: false,
+    heatmapData: null
   };
 
   // ── View (CSS-pixel space) ─────────────────────────────────────────────────
@@ -111,10 +115,94 @@
     }
     ctx.restore();
 
+    // Heatmap rendering
+    if (state.showHeatmap && state.heatmapData) {
+      renderHeatmap(ctx, state.heatmapData, fw, fl);
+    }
+
     drawDrawings(ctx, s.drawings);
     if (s.curDraw) _drawPath(ctx, s.curDraw);
+    
+    // Draw players and selected outline
     drawPlayers(ctx, s.players, s.ball);
+    if (state.selectedPlayer) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(state.selectedPlayer.x, state.selectedPlayer.y, PLAYER_R + 0.3, 0, Math.PI * 2);
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 0.15;
+      ctx.setLineDash([0.3, 0.2]);
+      ctx.stroke();
+      ctx.restore();
+    }
 
+    // Draw ghost preview suggestions
+    if (state.ghostSuggestions) {
+      state.ghostSuggestions.forEach(g => {
+        const player = state.players.find(p => p.id === g.playerId);
+        if (!player) return;
+        // Draw destination ghost (semi-transparent)
+        ctx.save();
+        ctx.globalAlpha = 0.55;
+        const colors = TEAM_COLORS[player.team];
+        const isGK = player.role === 'GK';
+        if (isGK) {
+          _diamond(ctx, g.x, g.y, PLAYER_R * 1.05);
+        } else {
+          ctx.beginPath();
+          ctx.arc(g.x, g.y, PLAYER_R, 0, Math.PI * 2);
+        }
+        ctx.fillStyle = colors.fill;
+        ctx.fill();
+        ctx.strokeStyle = colors.stroke;
+        ctx.lineWidth = 0.1;
+        ctx.stroke();
+
+        // Number on ghost
+        ctx.fillStyle = colors.text;
+        ctx.font = `bold ${(PLAYER_R * 0.9).toFixed(2)}px -apple-system,sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(String(player.number), g.x, g.y + 0.04);
+        ctx.restore();
+
+        // Draw arrow from current to suggest
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(player.x, player.y);
+        ctx.lineTo(g.x, g.y);
+        ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+        ctx.lineWidth = 0.12;
+        ctx.setLineDash([0.4, 0.2]);
+        ctx.stroke();
+
+        // Arrow head
+        const angle = Math.atan2(g.y - player.y, g.x - player.x);
+        const headlen = 1.0;
+        ctx.beginPath();
+        ctx.moveTo(g.x, g.y);
+        ctx.lineTo(g.x - headlen * Math.cos(angle - Math.PI / 6), g.y - headlen * Math.sin(angle - Math.PI / 6));
+        ctx.lineTo(g.x - headlen * Math.cos(angle + Math.PI / 6), g.y - headlen * Math.sin(angle + Math.PI / 6));
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(255,255,255,0.8)';
+        ctx.fill();
+        ctx.restore();
+      });
+    }
+
+    ctx.restore();
+  }
+
+  function renderHeatmap(ctx, heatmapData, fw, fl) {
+    const { heatmap, nx, ny, step } = heatmapData;
+    ctx.save();
+    for (let j = 0; j < ny; j++) {
+      for (let i = 0; i < nx; i++) {
+        const pVal = heatmap[j * nx + i];
+        ctx.fillStyle = `rgba(0, 230, 118, ${pVal * 0.38})`; // vibrant green with transparency
+        ctx.fillRect(i * step, j * step, step, step);
+      }
+    }
     ctx.restore();
   }
 
@@ -213,11 +301,23 @@
       dragTarget = hit;
       if (hit.type === 'player') {
         editTarget = hit.obj;
+        // set selected player
+        state.selectedPlayer = hit.obj;
+        state.ghostSuggestions = null; // clear previous ghosts when switching target
         longTimer  = setTimeout(() => { openPlayerDlg(hit.obj); dragTarget = null; clearLP(); }, 550);
+      } else {
+        state.selectedPlayer = null;
+        state.ghostSuggestions = null;
       }
-    } else if (!state.locked) {
-      isPanning = true;
-      panAnchor = { x: cp.x - view.offsetX, y: cp.y - view.offsetY };
+      render();
+    } else {
+      state.selectedPlayer = null;
+      state.ghostSuggestions = null;
+      render();
+      if (!state.locked) {
+        isPanning = true;
+        panAnchor = { x: cp.x - view.offsetX, y: cp.y - view.offsetY };
+      }
     }
   }
 
@@ -912,7 +1012,144 @@ B2: (12, 20)
     document.getElementById('btn-play'  ).onclick = togglePlay;
     document.getElementById('btn-frames').onclick = toggleFramePanel;
     document.getElementById('btn-ai'    ).onclick = openAIDlg;
+    document.getElementById('btn-suggest').onclick = openSuggestFlow;
     document.getElementById('btn-menu'  ).onclick = openMenu;
+
+    // ── Suggest flow ──────────────────────────────────────────────────────────
+    function openSuggestFlow() {
+      // 1. If player selected, run Individual Optimization (Potential Field)
+      if (state.selectedPlayer) {
+        const { fw, fl } = fieldDims();
+        const nextPos = optimizePlayer(state.selectedPlayer, state.players, state.ball, fw, fl);
+        state.ghostSuggestions = [{
+          playerId: state.selectedPlayer.id,
+          x: nextPos.x,
+          y: nextPos.y
+        }];
+        render();
+        showGhostActionToast();
+        return;
+      }
+
+      // 2. Otherwise open team optimization dialog
+      updateSpaceScores();
+      document.getElementById('chk-heatmap').checked = state.showHeatmap;
+      document.getElementById('suggest-dlg').classList.add('open');
+    }
+
+    function closeSuggestDlg() {
+      document.getElementById('suggest-dlg').classList.remove('open');
+    }
+
+    function updateSpaceScores() {
+      const { fw, fl } = fieldDims();
+      const voronoi = computeVoronoi(state.players, fw, fl);
+      document.getElementById('val-spaceA').textContent = Math.round(voronoi.scoreA);
+      document.getElementById('val-spaceB').textContent = Math.round(voronoi.scoreB);
+    }
+
+    // Event handlers for optimization dialog
+    document.getElementById('suggest-close').onclick = closeSuggestDlg;
+    document.getElementById('btn-suggest-close2').onclick = closeSuggestDlg;
+    document.getElementById('suggest-dlg').onclick = e => {
+      if (e.target === document.getElementById('suggest-dlg')) closeSuggestDlg();
+    };
+
+    document.getElementById('btn-opt-teamA').onclick = () => {
+      closeSuggestDlg();
+      runTeamOptimization('A');
+    };
+
+    document.getElementById('btn-opt-teamB').onclick = () => {
+      closeSuggestDlg();
+      runTeamOptimization('B');
+    };
+
+    document.getElementById('chk-heatmap').onchange = e => {
+      state.showHeatmap = e.target.checked;
+      if (state.showHeatmap) {
+        const { fw, fl } = fieldDims();
+        // Compute heatmap for whichever team was last optimized, or defaults to A
+        const team = state.selectedPlayer ? state.selectedPlayer.team : 'A';
+        state.heatmapData = computePitchControlHeatmap(state.players, fw, fl, team);
+      } else {
+        state.heatmapData = null;
+      }
+      render();
+    };
+
+    function runTeamOptimization(team) {
+      const { fw, fl } = fieldDims();
+      const formation = team === 'A' ? state.formationA : state.formationB;
+      const suggestions = optimizeTeam(team, formation, state.players, state.ball, fw, fl);
+      
+      if (suggestions.length > 0) {
+        state.ghostSuggestions = suggestions;
+        
+        // Also update heatmap if heatmap option is enabled
+        if (state.showHeatmap) {
+          state.heatmapData = computePitchControlHeatmap(state.players, fw, fl, team);
+        }
+        
+        render();
+        showGhostActionToast();
+      } else {
+        showToast('⚠️ 最適化を実行できませんでした');
+      }
+    }
+
+    function showGhostActionToast() {
+      // Create special temporary action toast for applying/cancelling suggestion
+      const el = document.getElementById('toast');
+      el.innerHTML = `
+        <span style="margin-right:10px;">🎯 最適化案を表示中:</span>
+        <button id="btn-ghost-apply" style="background:#4caf50; color:#fff; border:none; padding:4px 8px; border-radius:4px; font-weight:bold; cursor:pointer; margin-right:5px;">適用</button>
+        <button id="btn-ghost-cancel" style="background:#f44336; color:#fff; border:none; padding:4px 8px; border-radius:4px; font-weight:bold; cursor:pointer;">取消</button>
+      `;
+      el.classList.add('show');
+      if (_toastTimer) clearTimeout(_toastTimer);
+
+      document.getElementById('btn-ghost-apply').onclick = () => {
+        applyGhostSuggestions();
+        el.classList.remove('show');
+      };
+
+      document.getElementById('btn-ghost-cancel').onclick = () => {
+        cancelGhostSuggestions();
+        el.classList.remove('show');
+      };
+    }
+
+    function applyGhostSuggestions() {
+      if (!state.ghostSuggestions) return;
+      pushHistory();
+      state.ghostSuggestions.forEach(g => {
+        const player = state.players.find(p => p.id === g.playerId);
+        if (player) {
+          player.x = g.x;
+          player.y = g.y;
+        }
+      });
+      state.ghostSuggestions = null;
+      state.selectedPlayer = null;
+      
+      // Update heatmap if currently visible
+      if (state.showHeatmap) {
+        const { fw, fl } = fieldDims();
+        state.heatmapData = computePitchControlHeatmap(state.players, fw, fl, 'A');
+      }
+      
+      render();
+      saveToStorage();
+      showToast('✅ 最適化ポジションを適用しました');
+    }
+
+    function cancelGhostSuggestions() {
+      state.ghostSuggestions = null;
+      state.selectedPlayer = null;
+      render();
+      showToast('❌ キャンセルしました');
+    }
 
     // ──── LiteRT チャット統合 ────
     document.getElementById('btn-litert-chat').onclick = toggleLiteRTChat;

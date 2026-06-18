@@ -29,6 +29,7 @@
     <button id="btn-frames" class="tb-btn" title="フレーム一覧">🎞</button>
     <div class="tb-sep"></div>
     <button id="btn-ai"    class="tb-btn" title="AIに相談">🤖</button>
+    <button id="btn-suggest" class="tb-btn" title="ポジション最適化">🎯</button>
     <button id="btn-litert-chat" class="tb-btn" title="LiteRTチャット">⚙️</button>
   </div>
   <div id="mcp-status" class="mcp-dot" title="MCPサーバー（未接続）"></div>
@@ -280,6 +281,38 @@ npm start</pre>
   </div>
 </div>
 
+<!-- ── Suggest dialog ──────────────────────────────────────────────────── -->
+<div id="suggest-dlg" class="ai-dlg">
+  <div class="ai-box">
+    <div class="ai-box-hdr">
+      <h3>🎯 ポジション最適化</h3>
+      <button class="menu-hdr-close" id="suggest-close">✕</button>
+    </div>
+    <div class="ai-box-body">
+      <div class="ai-sec-ttl">最適化対象チームを選択してください</div>
+      <div style="display:flex; gap:10px; margin-bottom:15px;">
+        <button id="btn-opt-teamA" class="ai-svc-btn" style="flex:1; background:#e53935; color:#fff;">チーム A (下)</button>
+        <button id="btn-opt-teamB" class="ai-svc-btn" style="flex:1; background:#1e88e5; color:#fff;">チーム B (上)</button>
+      </div>
+      <div class="ai-sec-ttl">スペース支配率</div>
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; background:rgba(255,255,255,0.05); padding:10px; border-radius:6px;">
+        <span style="color:#e53935; font-weight:bold;">A: <span id="val-spaceA">50</span>%</span>
+        <span style="color:#1e88e5; font-weight:bold;">B: <span id="val-spaceB">50</span>%</span>
+      </div>
+      <div class="toggle-row" style="margin-bottom:15px;">
+        <span class="toggle-label" style="color:#ccc;">ピッチコントロールヒートマップを表示</span>
+        <label class="toggle-sw">
+          <input type="checkbox" id="chk-heatmap">
+          <span class="toggle-track"></span>
+        </label>
+      </div>
+      <div class="ai-apply-row">
+        <button class="btn-cancel" id="btn-suggest-close2" style="width:100%;">閉じる</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ── LiteRT チャットパネル ────────────────────────────────────────── -->
 <div id="litert-chat-panel" class="chat-panel">
   <div class="chat-header">
@@ -328,6 +361,7 @@ npm start</pre>
 </div>
 
 <script src="js/field.js"></script>
+<script src="js/optimizer.js"></script>
 <script src="js/player.js"></script>
 <script src="js/drawing.js"></script>
 <script src="js/animation.js"></script>
