@@ -1004,17 +1004,6 @@ B2: (12, 20)
     canvas.addEventListener('wheel',        onWheel, { passive: false });
     canvas.addEventListener('contextmenu',  e => e.preventDefault());
 
-    // Toolbar
-    document.getElementById('btn-move' ).onclick = () => setTool('move');
-    document.getElementById('btn-draw' ).onclick = () => setTool('draw');
-    document.getElementById('btn-erase').onclick = () => setTool('erase');
-    document.getElementById('btn-save-frame').onclick = saveFrame;
-    document.getElementById('btn-play'  ).onclick = togglePlay;
-    document.getElementById('btn-frames').onclick = toggleFramePanel;
-    document.getElementById('btn-ai'    ).onclick = openAIDlg;
-    document.getElementById('btn-suggest').onclick = openSuggestFlow;
-    document.getElementById('btn-menu'  ).onclick = openMenu;
-
     // ── Suggest flow ──────────────────────────────────────────────────────────
     function openSuggestFlow() {
       // 1. If player selected, run Individual Optimization (Potential Field)
@@ -1036,6 +1025,17 @@ B2: (12, 20)
       document.getElementById('chk-heatmap').checked = state.showHeatmap;
       document.getElementById('suggest-dlg').classList.add('open');
     }
+
+    // Bind suggestion buttons
+    document.getElementById('btn-suggest').onclick = openSuggestFlow;
+    document.getElementById('btn-move' ).onclick = () => setTool('move');
+    document.getElementById('btn-draw' ).onclick = () => setTool('draw');
+    document.getElementById('btn-erase').onclick = () => setTool('erase');
+    document.getElementById('btn-save-frame').onclick = saveFrame;
+    document.getElementById('btn-play'  ).onclick = togglePlay;
+    document.getElementById('btn-frames').onclick = toggleFramePanel;
+    document.getElementById('btn-ai'    ).onclick = openAIDlg;
+    document.getElementById('btn-menu'  ).onclick = openMenu;
 
     function closeSuggestDlg() {
       document.getElementById('suggest-dlg').classList.remove('open');
@@ -1101,20 +1101,28 @@ B2: (12, 20)
     function showGhostActionToast() {
       // Create special temporary action toast for applying/cancelling suggestion
       const el = document.getElementById('toast');
+      if (_toastTimer) {
+        clearTimeout(_toastTimer);
+        _toastTimer = null;
+      }
+      
+      // Stop standard auto-hide by using custom innerHTML and not setting a timeout
       el.innerHTML = `
         <span style="margin-right:10px;">🎯 最適化案を表示中:</span>
         <button id="btn-ghost-apply" style="background:#4caf50; color:#fff; border:none; padding:4px 8px; border-radius:4px; font-weight:bold; cursor:pointer; margin-right:5px;">適用</button>
         <button id="btn-ghost-cancel" style="background:#f44336; color:#fff; border:none; padding:4px 8px; border-radius:4px; font-weight:bold; cursor:pointer;">取消</button>
       `;
       el.classList.add('show');
-      if (_toastTimer) clearTimeout(_toastTimer);
 
-      document.getElementById('btn-ghost-apply').onclick = () => {
+      // Bind actions immediately after inserting into DOM
+      document.getElementById('btn-ghost-apply').onclick = (e) => {
+        e.stopPropagation();
         applyGhostSuggestions();
         el.classList.remove('show');
       };
 
-      document.getElementById('btn-ghost-cancel').onclick = () => {
+      document.getElementById('btn-ghost-cancel').onclick = (e) => {
+        e.stopPropagation();
         cancelGhostSuggestions();
         el.classList.remove('show');
       };
