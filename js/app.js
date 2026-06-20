@@ -297,20 +297,25 @@
     // move mode
     const hit = findAt(mp.x, mp.y);
     if (hit) {
-      pushHistory();
-      dragTarget = hit;
       if (hit.type === 'player') {
+        pushHistory();
+        dragTarget = hit;
         editTarget = hit.obj;
         // set selected player
         state.selectedPlayer = hit.obj;
         state.ghostSuggestions = null; // clear previous ghosts when switching target
         longTimer  = setTimeout(() => { openPlayerDlg(hit.obj); dragTarget = null; clearLP(); }, 550);
       } else {
+        // Ball clicked
+        pushHistory();
+        dragTarget = hit;
         state.selectedPlayer = null;
         state.ghostSuggestions = null;
       }
       render();
     } else {
+      // Clicked empty field. Only clear if not clicking action toast or dialogs.
+      // (The toast/dialog handles its own clicks outside canvas, but pointerdown on canvas shouldn't clear suggestions instantly unless click is truly on the pitch)
       state.selectedPlayer = null;
       state.ghostSuggestions = null;
       render();
