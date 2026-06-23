@@ -1083,7 +1083,7 @@ B2: (12, 20)
       render();
     };
 
-    function runTeamOptimization(team) {
+    function runTeamOptimization_old(team) {
       const { fw, fl } = fieldDims();
       const formation = team === 'A' ? state.formationA : state.formationB;
       const suggestions = optimizeTeam(team, formation, state.players, state.ball, fw, fl);
@@ -1096,6 +1096,42 @@ B2: (12, 20)
           state.heatmapData = computePitchControlHeatmap(state.players, fw, fl, team);
         }
         
+        render();
+        showGhostActionToast();
+      } else {
+        showToast('⚠️ 最適化を実行できませんでした');
+      }
+    }
+
+    function runTeamOptimization(team) {
+      const { fw, fl } = fieldDims();
+      const formation = team === 'A' ? state.formationA : state.formationB;
+
+      // ✨ ボール保持判定を含めた最適化
+      const result = optimizeTeamWithPossession(
+        team,
+        formation,
+        state.players,
+        state.ball,
+        fw,
+        fl
+      );
+
+      if (result.moves.length > 0) {
+        state.ghostSuggestions = result.moves;
+
+        // デバッグ表示
+        console.log(`
+=== 戦術分析 ===
+チーム: ${team}
+ボール保持: ${result.possession.possessionTeam}
+フェーズ: ${result.tactics}
+最も近い選手: ${result.possession.closestPlayer?.id} (${result.possession.distanceToBall.toFixed(1)}m)
+敵DFライン: y=${result.enemyAnalysis.dfLine.toFixed(1)}m
+オフサイドライン: y=${result.enemyAnalysis.offsideLine.toFixed(1)}m
+敵FW数: ${result.enemyAnalysis.enemyFWs.length}
+        `);
+
         render();
         showGhostActionToast();
       } else {
