@@ -1139,6 +1139,32 @@ B2: (12, 20)
       }
     }
 
+    function runTeamOptimization(team) {
+      const { fw, fl } = fieldDims();
+      const formation = team === 'A' ? state.formationA : state.formationB;
+
+      // ✨ 新しい関数を呼び出す！
+      const result = optimizeTeamWithPossession(
+        team,
+        formation,
+        state.players,
+        state.ball,
+        fw,
+        fl
+      );
+
+      if (result.moves && result.moves.length > 0) {
+        state.ghostSuggestions = result.moves;
+        render();
+        showGhostActionToast();
+      } else {
+        showToast('⚠️ 最適化を実行できませんでした');
+      }
+    }
+
+    /*****************************   */
+
+
     function showGhostActionToast() {
       // Create special temporary action toast for applying/cancelling suggestion
       const el = document.getElementById('toast');

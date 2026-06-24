@@ -834,3 +834,354 @@ function optimizeTeamWithPossession(
     tactics: isPossession ? '攻撃' : '守備',
   };
 }
+
+
+/*********************************************************************** */
+
+/**
+ * ボール保持判定（修正版）
+ */
+function determineBallPossession(players, ball) {
+  let closestPlayer = null;
+  let minDist = Infinity;
+
+  for (const p of players) {
+    const dist = Math.hypot(p.x - ball.x, p.y - ball.y);
+    if (dist < minDist) {
+      minDist = dist;
+      closestPlayer = p;
+    }
+  }
+
+  return {
+    possessionTeam: closestPlayer ? closestPlayer.team : 'A',
+    closestPlayer: closestPlayer,
+    distanceToBall: minDist,
+  };
+}
+
+/**
+ * 敵チーム分析（簡潔版）
+ */
+function analyzeEnemyDefense(players, team) {
+  const enemyTeam = team === 'A' ? 'B' : 'A';
+  const enemyPlayers = players.filter(p => p.team === enemyTeam);
+  
+  const enemyDFs = enemyPlayers.filter(p => p.role === 'DF');
+  const enemyFWs = enemyPlayers.filter(p => p.role === 'FW');
+
+  // 敵DF最後尾
+  let dfLineY;
+  if (team === 'A') {
+    // 敵(Team B)の最前DF
+    dfLineY = Math.min(...enemyDFs.map(p => p.y));
+  } else {
+    // 敵(Team A)の最前DF
+    dfLineY = Math.max(...enemyDFs.map(p => p.y));
+  }
+
+  return {
+    enemyDFs,
+    enemyFWs,
+    dfLineY,
+  };
+}
+
+/**
+ * 攻撃側コスト（攻撃的な配置を推奨）
+ * 
+ * 目標:
+ * - 敵DFを抜く（前に出る）
+ * - スペースを活用
+ * - 敵FWプレス回避
+ */
+function calculateAttackingCost(player, targetPos, players, ball, team, enemyDF) {
+  let cost = 0;
+
+  // ← 基本: 移動距離
+  const moveDist = Math.hypot(player.x - targetPos.x, player.y - targetPos.y);
+  cost += moveDist;
+
+  // ← ロール一致度
+  if (player.role !== targetPos.role) {
+    cost += 10.0;
+  }
+
+  // ← FW: 敵DFを抜いている（前に出ている）ことを報酬
+  if (player.role === 'FW') {
+    const isAhead = 
+      team === 'A' ? targetPos.y < enemyDF.dfLineY - 2 :
+                     targetPos.y > enemyDF.dfLineY + 2;
+    
+    if (isAhead) {
+      cost -= 5.0;  // 敵DF越しは良い（負のコストで報酬）
+    } else {
+      cost += 5.0;  // 敵DFより後ろは悪い
+    }
+  }
+
+  // ← ボールに近い（FW・MFが優先）
+  const distToBall = Math.hypot(targetPos.x - ball.x, targetPos.y - ball.y);
+  if (player.role === 'FW' || player.role === 'MF') {
+    cost += distToBall * 0.1;  // ボール近いほど低コスト
+  }
+
+  // ← 敵FWプレス回避
+  const nearestEnemyFW = enemyDF.enemyFWs.length > 0
+    ? Math.min(...enemyDF.enemyFWs.map(fw => 
+        Math.hypot(targetPos.x - fw.x, targetPos.y - fw.y)
+      ))
+    : 100;
+  
+  if (nearestEnemyFW < 4.0) {
+    cost += (4.0 - nearestEnemyFW) * 2.0;  // 敵FW近すぎは悪い
+  }
+
+  return cost;
+}
+
+/**
+ * 守備側コスト（守備的な配置を推奨）
+ * 
+ * 目標:
+ * - DFラインをそろえる（コンパクト）
+ * - 敵FWをマークする
+ * - ゴール前を守る
+ */
+function calculateDefendingCost(player, targetPos, players, ball, team, enemyDF) {
+  let cost = 0;
+
+  // ← 基本: 移動距離
+  const moveDist = Math.hypot(player.x - targetPos.x, player.y - targetPos.y);
+  cost += moveDist;
+
+  // ← ロール一致度
+  if (player.role !== targetPos.role) {
+    cost += 10.0;
+  }
+
+  // ← DF: ラインをそろえる（y座標を揃える）
+  if (player.role === 'DF') {
+    const otherDFs = players.filter(
+      p => p.team === team && p.role === 'DF' && p.id !== player.id
+    );
+
+    for (const df of otherDFs) {
+      const yDiff = Math.abs(targetPos.y - df.y);
+      if (yDiff > 3.0) {
+        // DFラインがズレている
+        cost += yDiff * 0.5;
+      }
+    }
+  }
+
+  // ← 敵FWへのマーク（DF・MFが近い）
+  if (player.role === 'DF' || player.role === 'MF') {
+    const nearestEnemyFW = enemyDF.enemyFWs.length > 0
+      ? Math.min(...enemyDF.enemyFWs.map(fw =>
+          Math.hypot(targetPos.x - fw.x, targetPos.y - fw.y)
+        ))
+      : 100;
+
+    if (nearestEnemyFW < 6.0) {
+      // 敵FWが近い → マーク取得
+      cost -= (6.0 - nearestEnemyFW) * 1.0;  // 報酬
+    } else {
+      // 敵FWが遠い → マーク失敗
+      cost += (nearestEnemyFW - 6.0) * 0.5;
+    }
+  }
+
+  // ← ゴール前を守る（最後尾のDF）
+  if (player.role === 'DF') {
+    const goalY = team === 'A' ? 0 : 68;  // ゴール位置
+    const distToGoal = Math.abs(targetPos.y - goalY);
+    const idealDist = 12.0;
+    
+    cost += Math.abs(distToGoal - idealDist) * 0.3;
+  }
+
+  return cost;
+}
+
+/**
+ * ✨ メイン最適化関数（修正版）
+ */
+function optimizeTeamWithPossession(team, formation, players, ball, fw, fl) {
+  console.log(`\n=== 最適化開始: Team ${team} ===`);
+
+  // Step 1: ボール保持判定
+  const possession = determineBallPossession(players, ball);
+  const isPossession = possession.possessionTeam === team;
+
+  console.log(`ボール保持チーム: ${possession.possessionTeam}`);
+  console.log(`このチーム (${team}): ${isPossession ? '攻撃' : '守備'}`);
+  console.log(`最も近い選手: ${possession.closestPlayer?.id} (距離: ${possession.distanceToBall.toFixed(1)}m)`);
+
+  // Step 2: 敵分析
+  const enemyDF = analyzeEnemyDefense(players, team);
+  console.log(`敵DFライン Y=${enemyDF.dfLineY.toFixed(1)}m`);
+
+  // Step 3: フォーメーション理想ポジション生成
+  const positions = FORMATIONS[formation];
+  if (!positions) {
+    console.error(`フォーメーション ${formation} が見つかりません`);
+    return [];
+  }
+
+  const half = fl / 2;
+  const isTeamA = team === 'A';
+
+  const idealPositions = [];
+  positions.forEach((pos, i) => {
+    let x, y;
+    if (isTeamA) {
+      x = pos.x * fw;
+      y = fl - pos.y * half;
+    } else {
+      x = (1 - pos.x) * fw;
+      y = pos.y * half;
+    }
+    idealPositions.push({ index: i, role: pos.role, x, y });
+  });
+
+  // Step 4: GK分離
+  const gkIdeal = idealPositions.find(pos => pos.role === 'GK');
+  const gkPlayer = players.find(p => p.team === team && p.role === 'GK');
+  const otherIdeals = idealPositions.filter(pos => pos.role !== 'GK');
+  const otherPlayers = players.filter(p => p.team === team && p.role !== 'GK');
+
+  console.log(`フォーメーション: ${formation}`);
+  console.log(`選手数: ${otherPlayers.length}`);
+
+  // Step 5: 攻撃 vs 守備でシフト
+  let shiftedIdeals = [...otherIdeals];
+
+  if (isPossession) {
+    // ✅ 攻撃側: 敵DFより前へ、ボール方向へ
+    console.log('戦術: 攻撃的配置');
+    
+    shiftedIdeals = shiftedIdeals.map(ideal => {
+      // 敵DFより前へ出る
+      let shiftAmount = 0;
+      if (isTeamA && ideal.role === 'FW') {
+        shiftAmount = -3.0;  // y を減らす（敵DFより前へ）
+      } else if (!isTeamA && ideal.role === 'FW') {
+        shiftAmount = 3.0;   // y を増やす（敵DFより前へ）
+      }
+
+      // ボール方向へもシフト
+      const ballYFactor = (ball.y / fl - 0.5) * 3.0;
+
+      const newY = ideal.y + shiftAmount + ballYFactor;
+      const clampedY = Math.max(2.0, Math.min(fl - 2.0, newY));
+
+      return { ...ideal, y: clampedY };
+    });
+  } else {
+    // ✅ 守備側: DFラインをそろえる、敵FW方向へ
+    console.log('戦術: 守備的配置');
+    
+    // DFのy座標を統一
+    const dfIdeals = shiftedIdeals.filter(p => p.role === 'DF');
+    if (dfIdeals.length > 0) {
+      const avgDFY = dfIdeals.reduce((sum, p) => sum + p.y, 0) / dfIdeals.length;
+      
+      shiftedIdeals = shiftedIdeals.map(ideal => {
+        if (ideal.role === 'DF') {
+          // DFはy座標を平均値に寄せる
+          return { ...ideal, y: avgDFY };
+        }
+        return ideal;
+      });
+    }
+
+    // 敵FW方向へ少しシフト
+    const avgEnemyFWY = enemyDF.enemyFWs.length > 0
+      ? enemyDF.enemyFWs.reduce((sum, fw) => sum + fw.y, 0) / enemyDF.enemyFWs.length
+      : (fl / 2);
+
+    shiftedIdeals = shiftedIdeals.map(ideal => {
+      if (ideal.role === 'DF' || ideal.role === 'MF') {
+        // DF・MFを敵FW方向へ少し前進
+        const moveTowardEnemyFW = (avgEnemyFWY - ideal.y) * 0.2;  // 20% だけ近づく
+        return { ...ideal, y: ideal.y + moveTowardEnemyFW };
+      }
+      return ideal;
+    });
+  }
+
+  // Step 6: コスト行列構築
+  const costMatrix = [];
+
+  for (let i = 0; i < otherPlayers.length; i++) {
+    const p = otherPlayers[i];
+    const row = [];
+
+    for (let j = 0; j < shiftedIdeals.length; j++) {
+      const ideal = shiftedIdeals[j];
+
+      let cost;
+      if (isPossession) {
+        cost = calculateAttackingCost(p, ideal, players, ball, team, enemyDF);
+      } else {
+        cost = calculateDefendingCost(p, ideal, players, ball, team, enemyDF);
+      }
+
+      row.push(cost);
+    }
+    costMatrix.push(row);
+  }
+
+  // デバッグ: コスト行列を出力
+  console.log('コスト行列:');
+  console.table(
+    costMatrix.map((row, i) => ({
+      選手: otherPlayers[i].id,
+      ロール: otherPlayers[i].role,
+      ...row.map((cost, j) => ({ [`理想${j}`]: cost.toFixed(1) }))
+        .reduce((a, b) => Object.assign(a, b), {})
+    }))
+  );
+
+  // Step 7: ハンガリアン法
+  const assignments = hungarianAssign(costMatrix);
+  console.log('割り当て結果:', assignments);
+
+  // Step 8: 結果を構築
+  const moves = [];
+
+  if (gkPlayer && gkIdeal) {
+    moves.push({
+      playerId: gkPlayer.id,
+      x: gkIdeal.x,
+      y: gkIdeal.y,
+    });
+  }
+
+  for (let i = 0; i < otherPlayers.length; i++) {
+    const p = otherPlayers[i];
+    const idealIdx = assignments[i];
+
+    if (idealIdx !== undefined && idealIdx !== -1 && idealIdx < shiftedIdeals.length) {
+      const targetPos = shiftedIdeals[idealIdx];
+      
+      console.log(
+        `${p.id} (${p.role}): (${p.x.toFixed(1)}, ${p.y.toFixed(1)}) → (${targetPos.x.toFixed(1)}, ${targetPos.y.toFixed(1)})`
+      );
+
+      moves.push({
+        playerId: p.id,
+        x: targetPos.x,
+        y: targetPos.y,
+      });
+    }
+  }
+
+  return {
+    moves,
+    isPossession,
+    possession,
+    enemyDF,
+  };
+}
