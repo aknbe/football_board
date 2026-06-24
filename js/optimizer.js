@@ -1185,3 +1185,37 @@ function optimizeTeamWithPossession(team, formation, players, ball, fw, fl) {
     enemyDF,
   };
 }
+
+/**
+ * グリッドポイントでのコントロール確率を取得
+ */
+function getControlProbAt(targetPos, players, team, fw, fl) {
+  const ROLE_SPEEDS = {
+    GK: 8.0,
+    DF: 9.0,
+    MF: 9.5,
+    FW: 10.0
+  };
+
+  let minTimeTeam = Infinity;
+  let minTimeEnemy = Infinity;
+  const enemyTeam = team === 'A' ? 'B' : 'A';
+
+  for (const p of players) {
+    const dist = Math.hypot(p.x - targetPos.x, p.y - targetPos.y);
+    const speed = ROLE_SPEEDS[p.role] || 9.0;
+    const time = dist / speed;
+
+    if (p.team === team) {
+      if (time < minTimeTeam) minTimeTeam = time;
+    } else {
+      if (time < minTimeEnemy) minTimeEnemy = time;
+    }
+  }
+
+  // Spearman時間的優位モデル
+  const k = 1.8;
+  const pControl = 1.0 / (1.0 + Math.exp(-k * (minTimeEnemy - minTimeTeam)));
+  
+  return pControl;
+}
