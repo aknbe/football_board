@@ -1004,128 +1004,145 @@ function calculateDefendingCost(player, targetPos, players, ball, team, enemyDF)
   return cost;
 }
 
+
+/**　***********************************************************
+ * 動的理想ポジション生成（フォーメーションに縛られず状況適応）
+ */
+function generateDynamicIdeals(team, players, ball, fw, fl, isPossession) {
+  const teamPlayers = players.filter(p => p.team === team && p.role !== 'GK');
+  const numDF = teamPlayers.filter(p => p.role === 'DF').length || 4;
+  const numMF = teamPlayers.filter(p => p.role === 'MF').length || 3;
+  const numFW = teamPlayers.filter(p => p.role === 'FW').length || 3;
+
+  const isTeamA = team === 'A';
+  const ideals = [];
+  const enemyAnalysis = analyzeEnemyDefense(players, team);
+
+  // 基本的なゾーン分割（攻撃/守備で重心をずらす）
+  let baseYShift = 0;
+  if (isPossession) {
+    baseYShift = isTeamA ? -8 : 8; // 攻撃時は前へ
+  } else {
+    baseYShift = isTeamA ? 5 : -5;  // 守備時はコンパクトに
+  }
+
+  const ballInfluence = (ball.y / fl - 0.5) * 15; // ボールに大きく引っ張られる
+
+  // DFゾーン（後方）
+  for (let i = 0; i < numDF; i++) {
+    const x = fw * (0.2 + (i / Math.max(1, numDF - 1)) * 0.6);
+    let y = isTeamA 
+      ? fl * 0.75 + baseYShift + ballInfluence * 0.3
+      : fl * 0.25 + baseYShift + ballInfluence * 0.3;
+    y = Math.max(fl * 0.1, Math.min(fl * 0.9, y));
+    ideals.push({ role: 'DF', x, y });
+  }
+
+  // MFゾーン（中央・流動的）
+  for (let i = 0; i < numMF; i++) {
+    const x = fw * (0.15 + (i / Math.max(1, numMF - 1)) * 0.7);
+    let y = isTeamA 
+      ? fl * 0.5 + baseYShift * 1.2 + ballInfluence * 0.6
+      : fl * 0.5 + baseYShift * 1.2 + ballInfluence * 0.6;
+    y = Math.max(fl * 0.25, Math.min(fl * 0.75, y));
+    ideals.push({ role: 'MF', x, y });
+  }
+
+  // FWゾーン（前方・敵DFを意識）
+  for (let i = 0; i < numFW; i++) {
+    const x = fw * (0.2 + (i / Math.max(1, numFW - 1)) * 0.6);
+    let y;
+    if (isPossession) {
+      // 攻撃時は敵DFラインを越える
+      y = isTeamA 
+        ? Math.min(enemyAnalysis.dfLineY - 5, ball.y - 8)
+        : Math.max(enemyAnalysis.dfLineY + 5, ball.y + 8);
+    } else {
+      y = isTeamA ? fl * 0.45 : fl * 0.55;
+    }
+    y = Math.max(5, Math.min(fl - 5, y));
+    ideals.push({ role: 'FW', x, y });
+  }
+
+  // ランダム微調整 + オープンスペース補正（多様性を持たせる）
+  ideals.forEach((pos, i) => {
+    const probe = getBestOpenSpace(pos.x, pos.y, players, fw, fl, team);
+    pos.x = (pos.x * 0.7 + probe.x * 0.3);
+    pos.y = (pos.y * 0.7 + probe.y * 0.3);
+  });
+
+  return ideals;
+}
+
+/** オープンスペース探索（簡易版） */
+function getBestOpenSpace(cx, cy, players, fw, fl, team) {
+  let bestScore = -Infinity;
+  let best = {x: cx, y: cy};
+  const angles = 12;
+  const dist = 10;
+
+  for (let a = 0; a < angles; a++) {
+    const angle = (a / angles) * Math.PI * 2;
+    const tx = cx + Math.cos(angle) * dist;
+    const ty = cy + Math.sin(angle) * dist;
+    if (tx < 2 || tx > fw-2 || ty < 2 || ty > fl-2) continue;
+
+    let score = 0;
+    players.forEach(p => {
+      const d = Math.hypot(p.x - tx, p.y - ty);
+      if (p.team === team) score -= 8 / (d + 1);
+      else score += 15 / (d + 1);
+    });
+    if (score > bestScore) {
+      bestScore = score;
+      best = {x: tx, y: ty};
+    }
+  }
+  return best;
+}
+
 /**
- * ✨ メイン最適化関数（修正版）
+ * 新しいメイン最適化関数（フォーメーション非依存・状況適応型）
  */
 function optimizeTeamWithPossession(team, formation, players, ball, fw, fl) {
-  console.log(`\n=== 最適化開始: Team ${team} ===`);
+  console.log(`\n=== 動的最適化開始: Team ${team} ===`);
 
-  // Step 1: ボール保持判定
   const possession = determineBallPossession(players, ball);
   const isPossession = possession.possessionTeam === team;
 
-  console.log(`ボール保持チーム: ${possession.possessionTeam}`);
-  console.log(`このチーム (${team}): ${isPossession ? '攻撃' : '守備'}`);
-  console.log(`最も近い選手: ${possession.closestPlayer?.id} (距離: ${possession.distanceToBall.toFixed(1)}m)`);
+  // 動的理想ポジション生成（ここが最大の変更点）
+  const dynamicIdeals = generateDynamicIdeals(team, players, ball, fw, fl, isPossession);
 
-  // Step 2: 敵分析
-  const enemyDF = analyzeEnemyDefense(players, team);
-  console.log(`敵DFライン Y=${enemyDF.dfLineY.toFixed(1)}m`);
-
-  // Step 3: フォーメーション理想ポジション生成
-  const positions = FORMATIONS[formation];
-  if (!positions) {
-    console.error(`フォーメーション ${formation} が見つかりません`);
-    return [];
-  }
-
-  const half = fl / 2;
-  const isTeamA = team === 'A';
-
-  const idealPositions = [];
-  positions.forEach((pos, i) => {
-    let x, y;
-    if (isTeamA) {
-      x = pos.x * fw;
-      y = fl - pos.y * half;
-    } else {
-      x = (1 - pos.x) * fw;
-      y = pos.y * half;
-    }
-    idealPositions.push({ index: i, role: pos.role, x, y });
-  });
-
-  // Step 4: GK分離
-  const gkIdeal = idealPositions.find(pos => pos.role === 'GK');
   const gkPlayer = players.find(p => p.team === team && p.role === 'GK');
-  const otherIdeals = idealPositions.filter(pos => pos.role !== 'GK');
   const otherPlayers = players.filter(p => p.team === team && p.role !== 'GK');
 
-  console.log(`フォーメーション: ${formation}`);
-  console.log(`選手数: ${otherPlayers.length}`);
-
-  // Step 5: 攻撃 vs 守備でシフト
-  let shiftedIdeals = [...otherIdeals];
-
-  if (isPossession) {
-    // ✅ 攻撃側: 敵DFより前へ、ボール方向へ
-    console.log('戦術: 攻撃的配置');
-    
-    shiftedIdeals = shiftedIdeals.map(ideal => {
-      // 敵DFより前へ出る
-      let shiftAmount = 0;
-      if (isTeamA && ideal.role === 'FW') {
-        shiftAmount = -3.0;  // y を減らす（敵DFより前へ）
-      } else if (!isTeamA && ideal.role === 'FW') {
-        shiftAmount = 3.0;   // y を増やす（敵DFより前へ）
-      }
-
-      // ボール方向へもシフト
-      const ballYFactor = (ball.y / fl - 0.5) * 3.0;
-
-      const newY = ideal.y + shiftAmount + ballYFactor;
-      const clampedY = Math.max(2.0, Math.min(fl - 2.0, newY));
-
-      return { ...ideal, y: clampedY };
-    });
-  } else {
-    // ✅ 守備側: DFラインをそろえる、敵FW方向へ
-    console.log('戦術: 守備的配置');
-    
-    // DFのy座標を統一
-    const dfIdeals = shiftedIdeals.filter(p => p.role === 'DF');
-    if (dfIdeals.length > 0) {
-      const avgDFY = dfIdeals.reduce((sum, p) => sum + p.y, 0) / dfIdeals.length;
-      
-      shiftedIdeals = shiftedIdeals.map(ideal => {
-        if (ideal.role === 'DF') {
-          // DFはy座標を平均値に寄せる
-          return { ...ideal, y: avgDFY };
-        }
-        return ideal;
-      });
-    }
-
-    // 敵FW方向へ少しシフト
-    const avgEnemyFWY = enemyDF.enemyFWs.length > 0
-      ? enemyDF.enemyFWs.reduce((sum, fw) => sum + fw.y, 0) / enemyDF.enemyFWs.length
-      : (fl / 2);
-
-    shiftedIdeals = shiftedIdeals.map(ideal => {
-      if (ideal.role === 'DF' || ideal.role === 'MF') {
-        // DF・MFを敵FW方向へ少し前進
-        const moveTowardEnemyFW = (avgEnemyFWY - ideal.y) * 0.2;  // 20% だけ近づく
-        return { ...ideal, y: ideal.y + moveTowardEnemyFW };
-      }
-      return ideal;
-    });
+  // GKは従来通り
+  const moves = [];
+  if (gkPlayer) {
+    const gkTarget = optimizePlayer(gkPlayer, players, ball, fw, fl); // 個別最適化も活用
+    moves.push({ playerId: gkPlayer.id, x: gkTarget.x, y: gkTarget.y });
   }
 
-  // Step 6: コスト行列構築
+  // コスト行列構築（役割ペナルティを大幅緩和）
   const costMatrix = [];
-
   for (let i = 0; i < otherPlayers.length; i++) {
     const p = otherPlayers[i];
     const row = [];
+    for (let j = 0; j < dynamicIdeals.length; j++) {
+      const target = dynamicIdeals[j];
+      let cost = Math.hypot(p.x - target.x, p.y - target.y);
 
-    for (let j = 0; j < shiftedIdeals.length; j++) {
-      const ideal = shiftedIdeals[j];
+      // 役割ペナルティを弱く（状況適応を優先）
+      const rolePenalty = (p.role !== target.role) ? 4.0 : 0;
+      cost += rolePenalty;
 
-      let cost;
+      // 追加評価（ピッチコントロール・敵配置）
+      const control = getControlProbAt(target, players, team, fw, fl);
+      cost -= control * 12; // 支配率が高い場所を強く優先
+
       if (isPossession) {
-        cost = calculateAttackingCost(p, ideal, players, ball, team, enemyDF);
-      } else {
-        cost = calculateDefendingCost(p, ideal, players, ball, team, enemyDF);
+        const distToBall = Math.hypot(target.x - ball.x, target.y - ball.y);
+        cost += distToBall * 0.08; // 攻撃時はボール近くを好む
       }
 
       row.push(cost);
@@ -1133,89 +1150,27 @@ function optimizeTeamWithPossession(team, formation, players, ball, fw, fl) {
     costMatrix.push(row);
   }
 
-  // デバッグ: コスト行列を出力
-  console.log('コスト行列:');
-  console.table(
-    costMatrix.map((row, i) => ({
-      選手: otherPlayers[i].id,
-      ロール: otherPlayers[i].role,
-      ...row.map((cost, j) => ({ [`理想${j}`]: cost.toFixed(1) }))
-        .reduce((a, b) => Object.assign(a, b), {})
-    }))
-  );
-
-  // Step 7: ハンガリアン法
   const assignments = hungarianAssign(costMatrix);
-  console.log('割り当て結果:', assignments);
 
-  // Step 8: 結果を構築
-  const moves = [];
-
-  if (gkPlayer && gkIdeal) {
-    moves.push({
-      playerId: gkPlayer.id,
-      x: gkIdeal.x,
-      y: gkIdeal.y,
-    });
-  }
-
+  // 割り当て + 最終微調整
   for (let i = 0; i < otherPlayers.length; i++) {
     const p = otherPlayers[i];
-    const idealIdx = assignments[i];
+    const idx = assignments[i];
+    if (idx !== undefined && idx !== -1) {
+      let target = { ...dynamicIdeals[idx] };
+      // 個別ポテンシャル場で最終調整
+      const refined = optimizePlayer(p, players, ball, fw, fl);
+      target.x = target.x * 0.6 + refined.x * 0.4;
+      target.y = target.y * 0.6 + refined.y * 0.4;
 
-    if (idealIdx !== undefined && idealIdx !== -1 && idealIdx < shiftedIdeals.length) {
-      const targetPos = shiftedIdeals[idealIdx];
-      
-      console.log(
-        `${p.id} (${p.role}): (${p.x.toFixed(1)}, ${p.y.toFixed(1)}) → (${targetPos.x.toFixed(1)}, ${targetPos.y.toFixed(1)})`
-      );
-
-      moves.push({
-        playerId: p.id,
-        x: targetPos.x,
-        y: targetPos.y,
-      });
+      moves.push({ playerId: p.id, x: target.x, y: target.y });
     }
   }
 
   return {
     moves,
     isPossession,
-    possession,
-    enemyDF,
+    dynamicIdeals, // デバッグ用
+    tactics: isPossession ? '攻撃（動的）' : '守備（動的）'
   };
-}
-
-/**
- * グリッドポイントでのコントロール確率を取得
- */
-function getControlProbAt(targetPos, players, team, fw, fl) {
-  const ROLE_SPEEDS = {
-    GK: 8.0,
-    DF: 9.0,
-    MF: 9.5,
-    FW: 10.0
-  };
-
-  let minTimeTeam = Infinity;
-  let minTimeEnemy = Infinity;
-  const enemyTeam = team === 'A' ? 'B' : 'A';
-
-  for (const p of players) {
-    const dist = Math.hypot(p.x - targetPos.x, p.y - targetPos.y);
-    const speed = ROLE_SPEEDS[p.role] || 9.0;
-    const time = dist / speed;
-
-    if (p.team === team) {
-      if (time < minTimeTeam) minTimeTeam = time;
-    } else {
-      if (time < minTimeEnemy) minTimeEnemy = time;
-    }
-  }
-
-  // Spearman時間的優位モデル
-  const k = 1.8;
-  const pControl = 1.0 / (1.0 + Math.exp(-k * (minTimeEnemy - minTimeTeam)));
-  
-  return pControl;
 }
